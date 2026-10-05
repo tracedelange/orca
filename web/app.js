@@ -759,9 +759,33 @@ addEventListener("keydown", (e) => {
   selected !== null ? closePanel() : up();
 });
 
+// ---- Plan usage ----
+
+// Same windows as the Hammerspoon panel: 5h counts down to its reset, the week names the reset day.
+async function loadUsage() {
+  const el = document.getElementById("usage");
+  const u = await fetch("/api/usage").then((r) => r.json()).catch(() => ({ error: "unavailable" }));
+  if (u.error) return (el.textContent = `usage ${u.error}`);
+  const left = (t) => {
+    const m = Math.max(0, Math.round((new Date(t) - Date.now()) / 60000));
+    return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+  };
+  const day = (t) => new Date(t).toLocaleString([], { weekday: "short", hour: "numeric" });
+  const who = Object.assign(document.createElement("span"), { className: "who", textContent: u.email ?? "not logged in" });
+  el.replaceChildren(who, ...[["5h", u.five_hour, left], ["wk", u.seven_day, day]].filter(([, w]) => w).map(([label, w, when]) => {
+    const pct = Math.round(w.utilization);
+    const row = document.createElement("span");
+    row.className = pct >= 80 ? "hot" : "";
+    row.innerHTML = `<b>${label}</b><i style="--pct:${pct}%"></i>${pct}%${w.resets_at ? ` · ${when(w.resets_at)}` : ""}`;
+    return row;
+  }));
+}
+
 // The bare URL opens the locked node.
 if (!location.hash && getLock() !== null) history.replaceState(null, "", hashFor(getLock()));
 buildRing();
 relayout(0);
 load();
 setInterval(load, POLL_MS);
+loadUsage();
+setInterval(loadUsage, 60_000);

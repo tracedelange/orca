@@ -67,8 +67,21 @@ header {
   pointer-events: none;
 }
 header > * { pointer-events: auto; flex-shrink: 0; }
+/* The open panel takes the right 420px, so the header ends where the panel starts. */
+body:not(.mode-term):has(#panel:not([hidden])) header { right: 444px; }
 #crumbs { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #mapbtn { display: none; }
+
+/* Plan usage: one bar per window, accent only when a window passes 80%. */
+#usage { margin-left: auto; display: flex; gap: 16px; font: 11px var(--mono); color: var(--ink-2); white-space: nowrap; }
+#usage b { font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.14em; margin-right: 6px; }
+#usage i { display: inline-block; vertical-align: middle; width: 48px; height: 3px; margin-right: 6px; text-decoration: none;
+  background: linear-gradient(90deg, var(--ink-2) var(--pct), var(--ink-3) var(--pct)); opacity: 0.8; }
+/* On the map the header floats over nodes, so the usage line gets a solid card like the panel. */
+body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(--ink-3); padding: 5px 10px; }
+#usage .who { color: var(--ink-3); }
+#usage .hot { color: var(--accent); }
+#usage .hot i { background: linear-gradient(90deg, var(--accent) var(--pct), var(--ink-3) var(--pct)); }
 
 /* Terminal mode: the map and its controls step aside. */
 .mode-term #map, .mode-term #legend, .mode-term #panel,

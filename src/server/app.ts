@@ -7,6 +7,7 @@ import { dispatch } from "../core/dispatch.ts";
 import { adoptSession, createNode, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
 import { liveTmuxSessions } from "../core/sessions.ts";
+import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type WorkerState } from "../core/workers.ts";
 
@@ -59,6 +60,7 @@ export function createServer(root: string) {
     try {
       if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
+      if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
       if (url.pathname === "/api/launch") {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
