@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orca</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500&family=Brygada+1918:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/vendor/xterm.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <nav id="crumbs"></nav>
+    <button id="about" type="button">Info</button>
+    <button id="new" type="button">New</button>
+    <button id="dispatch" type="button">Dispatch</button>
+    <button id="lock" type="button">Lock</button>
+    <button id="mapbtn" type="button">Map</button>
+  </header>
+
+  <svg id="map">
+  </svg>
+
+  <aside id="rail" hidden>
+    <div class="rail-head">Sessions</div>
+    <ol></ol>
+  </aside>
+
+  <!-- Legend: state is carried by stroke and label, not colour alone. A circle shows the most urgent session below it. -->
+  <svg id="legend" width="128" height="84" aria-label="State key">
+    <g class="a-needs"><circle class="rim" cx="10" cy="10" r="6"/><text x="26" y="13">needs you</text></g>
+    <g class="a-new"><circle class="rim" cx="10" cy="30" r="6"/><text x="26" y="33">new result</text></g>
+    <g class="a-working"><circle class="rim" cx="10" cy="50" r="6"/><text x="26" y="53">working</text></g>
+    <g class="a-idle"><circle class="rim" cx="10" cy="70" r="6"/><text x="26" y="73">idle</text></g>
+  </svg>
+
+  <aside id="panel" hidden></aside>
+
+  <!-- Terminal mode: one session fills the space right of the rail. -->
+  <section id="termview" hidden>
+    <div class="top"><span class="kicker"></span><span class="keys">esc map · shift+esc sends esc to claude · ⌘. toggle</span></div>
+    <div id="term"></div>
+  </section>
+
+  <script src="/vendor/d3.js"></script>
+  <script src="/vendor/xterm.js"></script>
+  <script src="/vendor/addon-fit.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
