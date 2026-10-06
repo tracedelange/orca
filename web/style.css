@@ -85,7 +85,7 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 
 /* Terminal mode: the map and its controls step aside. */
 .mode-term #map, .mode-term #legend, .mode-term #panel,
-.mode-term #about, .mode-term #new, .mode-term #dispatch, .mode-term #lock { display: none; }
+.mode-term #about, .mode-term #new, .mode-term #dispatch, .mode-term #lock, .mode-term #archived { display: none; }
 .mode-term #mapbtn { display: inline-block; }
 #termview {
   position: fixed;
@@ -143,6 +143,8 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 @media (prefers-reduced-motion: reduce) {
   .a-working .pulse, .a-needs .pulse { animation: none; transform: scale(1.35); opacity: 0.35; }
 }
+/* Archived nodes, when shown, sit back on the map. */
+.node.archived .body { opacity: 0.4; } /* on .body: the g carries the enter fade inline */
 /* Node kinds. Root: a filled disc with an outer ring. Parent: a ring with an inner ring
    ("contains"), filled when packed and hollow when unpacked. Leaf: one plain ring. */
 .halo, .inner { fill: none; pointer-events: none; }

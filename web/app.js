@@ -32,6 +32,10 @@ let panelNode = null; // last node rendered in the panel
 let editing = false;  // a form is open in the panel; polling must not redraw it
 const rail = document.getElementById("rail");
 let seen = readSeen(); // sessionId -> finishedAt of the last result you looked at
+const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
+let showArchived = readFlag("orca.showArchived");
+const archivedButton = document.getElementById("archived");
+archivedButton.classList.toggle("on", showArchived);
 
 // ---- Data ----
 
@@ -42,15 +46,37 @@ async function load() {
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
   if (text !== treeText) {
     treeText = text;
-    tree = d3.hierarchy(JSON.parse(text)).sort((a, b) => a.data.path.localeCompare(b.data.path));
+    tree = d3.hierarchy(JSON.parse(text), shownChildren).sort((a, b) => a.data.path.localeCompare(b.data.path));
     byPath = new Map(tree.descendants().map((d) => [d.data.path, d]));
     graphRoot = nodeAt(pathFromHash());
     render();
   }
   if (term) markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   pruneSeen();
+  revealActive();
   renderRail();
   if (selected !== null) refreshPanel();
+}
+
+// Archived nodes leave the tree unless shown, or unless a session is still live inside them.
+const hasSessions = (n) => n.sessions.length > 0 || n.children.some(hasSessions);
+const shownChildren = (n) => n.children.filter((c) => showArchived || !c.archived || hasSessions(c));
+
+function readFlag(key) {
+  try { return localStorage.getItem(key) === "1"; } catch { return false; }
+}
+archivedButton.addEventListener("click", () => {
+  showArchived = !showArchived;
+  archivedButton.classList.toggle("on", showArchived);
+  try { localStorage.setItem("orca.showArchived", showArchived ? "1" : "0"); } catch {}
+  treeText = ""; // rebuild the hierarchy with the new filter
+  load();
+});
+
+async function setArchived(path, archived) {
+  await post("update", { path, archived });
+  panelText = "";
+  await load();
 }
 
 // ---- Session state ----
@@ -142,6 +168,19 @@ function reveal(path) {
   if (!d) return;
   if (!within(path, graphRoot.data.path)) return setRoot("");
   for (let a = d.parent; a && a !== graphRoot; a = a.parent) expanded.add(a.data.path);
+  writeExpanded();
+  render();
+}
+
+// A session new to the rail unpacks the nodes above it, once, so packing it again sticks.
+function revealActive() {
+  if (!graphRoot) return;
+  const fresh = railSessions().filter((s) => !revealed.has(s.sessionId));
+  if (!fresh.length) return;
+  for (const s of fresh) {
+    revealed.add(s.sessionId);
+    for (let a = byPath.get(s.path)?.parent; a && a !== graphRoot; a = a.parent) expanded.add(a.data.path);
+  }
   writeExpanded();
   render();
 }
@@ -403,7 +442,7 @@ const kindOf = (d) => (d === graphRoot ? "is-root" : !d.children ? "leaf" : isUn
 
 // Sizes animate, so a node grows or shrinks smoothly when it is packed or unpacked.
 function fill(sel, t = d3.transition().duration(0)) {
-  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.path === selected ? " selected" : ""}`);
+  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.d.data.archived ? " archived" : ""}${n.path === selected ? " selected" : ""}`);
   sel.select(".halo").transition(t).attr("r", (n) => (n.d === graphRoot ? n.r + 6 : 0));
   sel.select(".rim").transition(t).attr("r", (n) => n.r);
   sel.select(".pulse").transition(t).attr("r", (n) => n.r);
@@ -587,7 +626,7 @@ function renderPanel(n) {
       <button data-form="edit" type="button">Edit</button>
       <button data-form="child" type="button">Add child</button>
       <button data-form="queue" type="button">Queue</button>
-      ${n.path ? `<button data-form="move" type="button">Move</button><button data-form="remove" type="button">Delete</button>` : ""}
+      ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
       ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
     </div>
     <form class="form" hidden></form>
@@ -904,6 +943,8 @@ panel.addEventListener("click", (e) => {
   if (adopt) adoptSession(adopt);
   const attach = e.target.closest(".attach");
   if (attach) openTerminal(attach.dataset.tmux, selected, attach.dataset.host || undefined);
+  const archive = e.target.closest("[data-archive]");
+  if (archive) setArchived(selected, !!archive.dataset.archive);
   const rootButton = e.target.closest("[data-root]");
   if (rootButton) setRoot(rootButton.dataset.root);
   const copy = e.target.closest(".copy");

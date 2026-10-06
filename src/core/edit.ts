@@ -65,8 +65,8 @@ export function removeNode(root: string, rel: string): string {
 }
 
 // Edits title and goal in place. Other frontmatter keys, comments and the rest of the body are kept.
-// An empty goal removes the ## Goal section.
-export function updateNode(root: string, rel: string, fields: { title?: string; goal?: string }) {
+// An empty goal removes the ## Goal section. archived: false removes the key.
+export function updateNode(root: string, rel: string, fields: { title?: string; goal?: string; archived?: boolean }) {
   const file = path.join(resolveInRoot(root, rel), "CLAUDE.md");
   const text = fs.readFileSync(file, "utf8");
   const lines = text.split("\n");
@@ -82,6 +82,10 @@ export function updateNode(root: string, rel: string, fields: { title?: string; 
   if (fields.goal !== undefined) {
     doc.delete("goal"); // the goal belongs in the body
     body = setGoal(body, fields.goal.trim());
+  }
+  if (fields.archived !== undefined) {
+    if (fields.archived) doc.set("archived", true);
+    else doc.delete("archived");
   }
   fs.writeFileSync(file, `---\n${doc.toString()}---\n${body}`);
 }

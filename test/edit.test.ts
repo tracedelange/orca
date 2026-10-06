@@ -51,6 +51,14 @@ test("update edits fields and keeps everything else", () => {
   assert.match(fs.readFileSync(path.join(root, "work", "CLAUDE.md"), "utf8"), /## Goal\nAdded\n\n## Context/);
 });
 
+test("update archives and unarchives a node", () => {
+  const root = seededRoot();
+  updateNode(root, "work/vmt-analyzer", { archived: true });
+  assert.equal(readNodeDetail(root, "work/vmt-analyzer").archived, true);
+  updateNode(root, "work/vmt-analyzer", { archived: false });
+  assert.doesNotMatch(fs.readFileSync(path.join(root, "work/vmt-analyzer/CLAUDE.md"), "utf8"), /archived/);
+});
+
 test("create refuses existing nodes and hidden names", () => {
   const root = seededRoot();
   assert.deepEqual(createNode(root, "work/a/b", { goal: "G" }), ["work/a", "work/a/b"]);
