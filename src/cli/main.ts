@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { dispatch } from "../core/dispatch.ts";
 import { adoptSession, createNode, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { rootDir } from "../core/paths.ts";
+import { addToQueue, queueItems } from "../core/queue.ts";
 import { claim, findClaudePid } from "../core/claims.ts";
 import { place } from "../core/dispatch.ts";
 import { installHooks, installSkill, sessionsDir, USER_SETTINGS, USER_SKILL } from "../core/sessions.ts";
@@ -25,11 +26,12 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   claim: claimSession,
   adopt,
   worker,
+  queue,
 };
 const [cmd = "", ...args] = process.argv.slice(2);
 
 try {
-  if (!commands[cmd]) throw new Error("usage: nodes <new|mv|rm|set|tree|check|init|launch|dispatch|end|claim|adopt|worker|install-hooks>");
+  if (!commands[cmd]) throw new Error("usage: nodes <new|mv|rm|set|tree|check|init|launch|dispatch|queue|end|claim|adopt|worker|install-hooks>");
   await commands[cmd](args);
 } catch (err) {
   console.error((err as Error).message);
@@ -45,6 +47,16 @@ function newNode(argv: string[]) {
   if (positionals.length !== 1) throw new Error('usage: nodes new <path> [--title "..."] [--goal "..."]');
   requireRoot();
   for (const p of createNode(root, positionals[0], values)) console.log(`created ${p}`);
+}
+
+// Adds a task to a node's queue, or lists the queue. The orca server runs the queue.
+function queue(argv: string[]) {
+  if (argv.length < 1) throw new Error('usage: nodes queue <path> ["task"]');
+  requireRoot();
+  const [rel, ...task] = argv;
+  if (task.length) return addToQueue(root, rel, task.join(" "));
+  const file = path.join(root, rel, "CLAUDE.md");
+  for (const i of queueItems(fs.readFileSync(file, "utf8"))) console.log(`[${i.mark}] ${i.text}${i.child ? ` → ${i.child}` : ""}`);
 }
 
 function move(argv: string[]) {

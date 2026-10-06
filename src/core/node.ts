@@ -7,12 +7,13 @@ export type NodeFields = {
   goal?: string;
   repos: string[]; // `repo` may be one path or a list
   branch?: string;
+  background?: boolean; // a queue worker: shown on the map, kept off the rail
   extra: Record<string, unknown>;
   issues: Issue[];
 };
 
 // "status" is no longer used (state comes from sessions); old lines are ignored rather than shown.
-const KNOWN = new Set(["title", "goal", "status", "repo", "branch"]);
+const KNOWN = new Set(["title", "goal", "status", "repo", "branch", "background"]);
 
 export function parseNode(text: string, fallbackTitle: string): NodeFields & { body: string } {
   const issues: Issue[] = [];
@@ -48,6 +49,7 @@ export function parseNode(text: string, fallbackTitle: string): NodeFields & { b
     goal: goal ?? scalar(data.goal),
     repos: (Array.isArray(data.repo) ? data.repo : [data.repo]).map(scalar).filter((r): r is string => !!r),
     branch: scalar(data.branch),
+    background: data.background === true || undefined,
     extra: Object.fromEntries(Object.entries(data).filter(([k]) => !KNOWN.has(k))),
     issues,
     body,

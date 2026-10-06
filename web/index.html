@@ -17,7 +17,6 @@
     <button id="about" type="button">Info</button>
     <button id="new" type="button">New</button>
     <button id="dispatch" type="button">Dispatch</button>
-    <button id="lock" type="button">Lock</button>
     <button id="mapbtn" type="button">Map</button>
   </header>
 
@@ -30,12 +29,18 @@
   </aside>
 
   <!-- Legend: state is carried by stroke and label, not colour alone. A circle shows the most urgent session below it. -->
-  <svg id="legend" width="128" height="84" aria-label="State key">
+  <svg id="legend" width="128" height="160" aria-label="Node and state key">
+    <g class="node is-root"><circle class="halo" cx="10" cy="10" r="9"/><circle class="rim" cx="10" cy="10" r="5"/><text x="26" y="13">root</text></g>
+    <g class="node packed"><circle class="rim" cx="10" cy="32" r="7"/><circle class="inner" cx="10" cy="32" r="4"/><text x="26" y="35">parent</text></g>
+    <g class="node leaf a-ready"><circle class="rim" cx="10" cy="54" r="5"/><text x="26" y="57">leaf</text></g>
+    <g transform="translate(0,76)">
     <g class="a-needs"><circle class="rim" cx="10" cy="10" r="6"/><text x="26" y="13">needs you</text></g>
     <g class="a-new"><circle class="rim" cx="10" cy="30" r="6"/><text x="26" y="33">new result</text></g>
     <g class="a-working"><circle class="rim" cx="10" cy="50" r="6"/><text x="26" y="53">working</text></g>
     <g class="a-idle"><circle class="rim" cx="10" cy="70" r="6"/><text x="26" y="73">idle</text></g>
+    </g>
   </svg>
+  <p id="hint">click to unpack · drag to pan · pinch to zoom · f to fit</p>
 
   <aside id="panel" hidden></aside>
 

@@ -6,6 +6,7 @@ import { WebSocketServer } from "ws";
 import { dispatch } from "../core/dispatch.ts";
 import { adoptSession, createNode, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
+import { addToQueue, runQueues } from "../core/queue.ts";
 import { liveTmuxSessions } from "../core/sessions.ts";
 import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, readNodeDetail, readTree } from "../core/tree.ts";
@@ -46,6 +47,7 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   },
   adopt: (root, b) => adoptSession(root, String(b.session ?? "")),
   dispatch: (root, b) => dispatch(root, b.path, String(b.prompt ?? ""), b.host || undefined),
+  queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
 };
 
 export function createServer(root: string) {
@@ -54,6 +56,12 @@ export function createServer(root: string) {
     setTimeout(poll, 5000).unref();
   };
   poll();
+  // The queue manager: one pass every 5 seconds, never two at once.
+  const manage = async () => {
+    await runQueues(root).catch((err) => console.error(`queue: ${err.message}`));
+    setTimeout(manage, 5000).unref();
+  };
+  manage();
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");

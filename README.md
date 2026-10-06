@@ -1,6 +1,6 @@
 # orca
 
-A tree of nodes on disk, and a viewer that shows it as nested, zoomable circles. See `design.md` for the spec.
+A tree of nodes on disk, and a viewer that shows it as a force-directed graph. See `design.md` for the spec.
 
 ## Requirements
 
@@ -92,16 +92,16 @@ Open `https://<machine>.<tailnet>.ts.net/` from another machine on the tailnet.
 
 ## Viewer
 
-- Click a circle with children to zoom into it. Click a leaf to open its details.
-- The `i` mark on a circle opens details for that circle. `Info` in the header opens details for the current focus.
-- Click the background, or press Escape, to zoom out. If the panel is open, Escape closes the panel first.
-- The URL hash holds the focus, so the back button and bookmarks work.
-- A circle's state comes from the sessions below it, most urgent first: needs you, new result, working, idle. A result stays new until you open that session.
-- The left rail lists every session under the lock in the same order. Click one to jump to its node and terminal. The tab title counts what needs you.
+- Click a node with children to unpack it, or pack it again. Click a leaf, or the root, to open its details.
+- The `i` mark on a node opens its details. `Info` in the header opens details for the root.
+- Drag a node to move it. Drag the background, or scroll on a trackpad, to pan. Pinch, or use a mouse wheel, to zoom. Press `f` to fit the graph to the screen. Click the background, or press Escape, to close the panel.
+- `Set as root` in a node's panel makes it the root. The breadcrumb steps back up. The URL hash holds the root, and the browser remembers it and the unpacked nodes.
+- A packed node shows the most urgent state of everything inside it: needs you, new result, working, idle. An unpacked node shows only its own sessions. A result stays new until you open that session.
+- The left rail lists every session under the root in the same order. Click one to jump to its node and terminal. The tab title counts what needs you.
 - A session stays in the rail while its Claude process runs. End (on hover in the rail, or in the panel) quits it; working sessions need a second click. The conversation stays on disk, and the panel's Resume reopens it.
 - A registered session that runs outside tmux has no Terminal button. Use Move into orca in the panel (or `nodes adopt <session id>`). Orca quits that Claude, which saves the conversation, and resumes it in tmux in the same folder. It works only between turns.
 - Opening a terminal switches to terminal mode: the session fills the space right of the rail, and rail clicks switch sessions. Esc returns to the map on that session's node. Shift+Esc sends Escape to Claude. ⌘. toggles between the map and the last terminal.
-- `New` opens a form to add a child to the node you are in.
-- `Dispatch` (or `/`) takes a prompt. A Haiku call picks an existing node or makes a new one under the node you are in, then Claude starts there on the prompt. `nodes dispatch <scope> "<prompt>"` does the same from a shell.
-- `Lock` makes the current focus the top of the map in this browser. Zooming out stops there, the breadcrumb starts there, and the bare URL opens it. `Unlock` clears it.
+- `New` opens a form to add a child to the root.
+- `Dispatch` (or `/`) takes a prompt. A Haiku call picks an existing node or makes a new one under the root, then Claude starts there on the prompt. `nodes dispatch <scope> "<prompt>"` does the same from a shell.
 - The panel's Edit, Add child, Move and Delete buttons do the same as `nodes set`, `new`, `mv` and `rm`.
+- The panel's Queue button adds tasks to the node's `## Queue` section, one per line. `nodes queue <path> "<task>"` does the same from a shell. The server starts a background worker for each task, 2 at a time. Each worker is a child node, and works in its own git worktree when the node has a repo. When a worker stops, the server merges its branch into your checkout and checks the task off with the result. Workers stay off the rail unless they need you. The orca server must run for the queue to move.

@@ -1,28 +1,28 @@
-const DURATION = 500;
 const POLL_MS = 5000;
-// Pack is laid out with no padding; drawing children slightly smaller leaves gaps that scale with zoom.
-const SHRINK = 0.9;
-// A node's state comes from the sessions in its subtree, most urgent first.
+// A node's state comes from its sessions, most urgent first. A packed node also counts what it hides.
 const STATES = ["needs", "new", "working", "ready", "idle"];
 const STATE_LABEL = { needs: "needs you", new: "new result", working: "working", ready: "seen", idle: "idle" };
 const STATE_MARK = { needs: "◆", new: "◉", working: "●", ready: "○", idle: "·" };
 
 const svg = d3.select("#map");
-const gRing = svg.append("g").attr("class", "ring");
-const gNodes = svg.append("g");
+const gView = svg.append("g");                       // pan and zoom apply here
+const gLinks = gView.append("g").attr("class", "links");
+const gNodes = gView.append("g");
 const crumbs = document.getElementById("crumbs");
 const panel = document.getElementById("panel");
 
-let root = null;      // packed d3 hierarchy
+let tree = null;      // d3 hierarchy of the whole node tree
 let byPath = new Map();
-let focus = null;
-let view = null;      // [x, y, r] of the layout circle that fills the focus ring
-let geo = null;       // screen centre and ring radius
+let graphRoot = null;       // the root of the graph; any node can be it
+let expanded = readSet("orca.expanded"); // unpacked nodes, per browser
+const pos = new Map(); // path -> simulation node, so positions survive each poll
+let shownKey = "";    // visible paths; the layout reheats only when this changes
+let center = { cx: 0, cy: 0 };
 let selected = null;  // path shown in the panel
 let treeText = "";
 let panelText = "";
 let panelFile = "";
-let term = null;      // open terminal: { xterm, ws, ro, name, path }
+let term = null;      // open terminal: { xterm, ws, ro, name, path, host }
 let lastTerm = null;  // { name, path, host } of the last terminal, for ⌘.
 let workerList = [];  // [{ host, name, error }] from /api/workers
 // A session is the open terminal when its tmux name and machine both match.
@@ -30,10 +30,8 @@ const isOpen = (s, t = term) => !!t && s.tmux === t.name && (s.host ?? null) ===
 const termview = document.getElementById("termview");
 let panelNode = null; // last node rendered in the panel
 let editing = false;  // a form is open in the panel; polling must not redraw it
-const lockButton = document.getElementById("lock");
 const rail = document.getElementById("rail");
 let seen = readSeen(); // sessionId -> finishedAt of the last result you looked at
-let arcSeq = 0;
 
 // ---- Data ----
 
@@ -44,17 +42,12 @@ async function load() {
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
   if (text !== treeText) {
     treeText = text;
-    root = d3.pack().size([1000, 1000]).padding(0)(
-      d3.hierarchy(JSON.parse(text))
-        .sum((d) => (d.children.length ? 0 : 1))
-        .sort((a, b) => b.value - a.value || a.data.path.localeCompare(b.data.path)),
-    );
-    byPath = new Map(root.descendants().map((d) => [d.data.path, d]));
-    const target = nodeAt(pathFromHash());
-    view = [target.x, target.y, target.r];
-    show(target, 0);
+    tree = d3.hierarchy(JSON.parse(text)).sort((a, b) => a.data.path.localeCompare(b.data.path));
+    byPath = new Map(tree.descendants().map((d) => [d.data.path, d]));
+    graphRoot = nodeAt(pathFromHash());
+    render();
   }
-  if (term) markSeen(sessionsIn(root).filter((s) => isOpen(s)));
+  if (term) markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   pruneSeen();
   renderRail();
   if (selected !== null) refreshPanel();
@@ -74,13 +67,13 @@ function markSeen(sessions) {
   for (const s of fresh) seen[s.sessionId] = s.finishedAt;
   writeSeen();
   renderRail();
-  show(focus, 0);
+  render();
   // The panel only redraws when server data changes, and "seen" is local, so force it.
   panelText = "";
   if (selected !== null) refreshPanel();
 }
 function pruneSeen() {
-  const live = new Set(sessionsIn(root).map((s) => s.sessionId));
+  const live = new Set(sessionsIn(tree).map((s) => s.sessionId));
   const before = Object.keys(seen).length;
   seen = Object.fromEntries(Object.entries(seen).filter(([id]) => live.has(id)));
   if (Object.keys(seen).length !== before) writeSeen();
@@ -89,94 +82,342 @@ function pruneSeen() {
 // A finished turn you have not opened since it finished.
 const isNew = (s) => s.state === "ready" && !!s.finishedAt && s.finishedAt > (seen[s.sessionId] ?? "");
 const sessionState = (s) => (s.state === "needs-input" ? "needs" : isNew(s) ? "new" : s.state);
-const sessionsIn = (d) => d.descendants().flatMap((x) => x.data.sessions.map((s) => ({ ...s, path: x.data.path, title: x.data.title })));
-const stateOf = (d) => STATES.find((st) => sessionsIn(d).some((s) => sessionState(s) === st)) ?? "idle";
+const withNode = (x) => x.data.sessions.map((s) => ({ ...s, path: x.data.path, title: x.data.title, background: x.data.background }));
+const sessionsIn = (d) => d.descendants().flatMap(withNode);
+const mostUrgent = (sessions) => STATES.find((st) => sessions.some((s) => sessionState(s) === st)) ?? "idle";
 
-// Nearest existing node, walking up if the path was deleted. Never above the lock.
+// ---- Root and unpacked nodes ----
+
+function readSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key)) ?? []); } catch { return new Set(); }
+}
+function writeExpanded() {
+  try { localStorage.setItem("orca.expanded", JSON.stringify([...expanded])); } catch {}
+}
+function storedRoot() {
+  try { return localStorage.getItem("orca.root") ?? localStorage.getItem("orca.lock"); } catch { return null; }
+}
+
+// Nearest existing node, walking up if the path was deleted.
 function nodeAt(p) {
   while (p && !byPath.has(p)) p = p.split("/").slice(0, -1).join("/");
-  const d = byPath.get(p) ?? root;
-  const lock = lockNode();
-  return lock && !within(d.data.path, lock.data.path) ? lock : d;
+  return byPath.get(p) ?? tree;
 }
 
 const pathFromHash = () => decodeURIComponent(location.hash.replace(/^#\/?/, ""));
 const hashFor = (p) => "#/" + p.split("/").map(encodeURIComponent).join("/");
-const go = (d) => (location.hash = hashFor(d.data.path));
-const up = () => focus?.parent && focus !== lockNode() && go(focus.parent);
 const within = (p, base) => base === "" || p === base || p.startsWith(base + "/");
 
-// ---- Map ----
+// The URL holds the root, and the browser remembers it, so the bare URL opens the last root.
+function setRoot(p) {
+  location.hash = hashFor(p);
+}
+function applyRoot() {
+  graphRoot = nodeAt(pathFromHash());
+  try { localStorage.setItem("orca.root", graphRoot.data.path); } catch {}
+  pos.clear();
+  centerView(0);
+  fitWhenSettled = true;
+  render();
+  renderRail();
+}
 
-function show(target, duration) {
-  focus = target;
-  // Keep the URL on the node actually shown, e.g. after clamping to the lock.
-  if (location.hash !== hashFor(focus.data.path)) history.replaceState(null, "", hashFor(focus.data.path));
-  const t = svg.transition("zoom").duration(duration).ease(d3.easeCubicInOut);
+const isUnpacked = (d) => d === graphRoot || expanded.has(d.data.path);
 
-  gNodes.selectAll("g.node")
-    .data(focus.children ?? [], (d) => d.data.path)
-    .join(
-      (enter) => enter.append("g").call(build).style("opacity", 0),
-      (update) => update,
-      (exit) => exit.classed("leaving", true).transition(t).style("opacity", 0).remove(),
-    )
-    .call(fill)
-    .transition(t)
-    .style("opacity", 1);
+function toggle(d) {
+  if (expanded.has(d.data.path)) {
+    // Packing a node packs everything inside it, and its children forget their places.
+    for (const x of d.descendants()) {
+      expanded.delete(x.data.path);
+      if (x !== d) pos.delete(x.data.path);
+    }
+  } else expanded.add(d.data.path);
+  writeExpanded();
+  render();
+}
 
-  gRing.attr("class", `ring a-${stateOf(focus)}`);
-  gRing.select(".ring-label textPath").text([focus.data.title, rimText(focus)].filter(Boolean).join("  ·  ").toUpperCase());
-  gRing.select(".sessions").datum(focus).call(drawDots);
-  gRing.select(".empty").style("display", focus.children ? "none" : null);
-  renderCrumbs();
+// Unpacks every node between the root and `path`, so its circle is on screen.
+function reveal(path) {
+  let d = byPath.get(path);
+  if (!d) return;
+  if (!within(path, graphRoot.data.path)) return setRoot("");
+  for (let a = d.parent; a && a !== graphRoot; a = a.parent) expanded.add(a.data.path);
+  writeExpanded();
+  render();
+}
 
-  const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r]);
-  position();
-  t.tween("zoom", () => (k) => {
-    view = i(k);
-    position();
+// ---- Graph ----
+
+const EASE = d3.easeCubicOut;
+const GROW_MS = 420;
+
+// Size follows the number of direct children. A packed parent is larger than an unpacked hub.
+const radius = (d) => {
+  const c = d.children?.length ?? 0;
+  if (d === graphRoot) return 15 + 3 * Math.sqrt(c);
+  if (!c) return 10;
+  return isUnpacked(d) ? 10 + 3 * Math.sqrt(c) : 13 + 6 * Math.sqrt(c);
+};
+
+// Collision covers the circle and the title under it (about 7px per character at 13px), plus a margin.
+const space = (n) => Math.max(n.r + 34, n.d.data.title.length * 3.7 + 18);
+// Each depth below the root sits on its own ring, so branches take separate sectors instead of interleaving.
+const RING = 165;
+const sim = d3.forceSimulation()
+  .force("link", d3.forceLink().id((n) => n.path).distance((l) => l.source.r + l.target.r + 100).strength(0.4))
+  .force("charge", d3.forceManyBody().strength((n) => -380 - n.r * 14).distanceMax(700))
+  .force("collide", d3.forceCollide(space).strength(0.9))
+  .force("radial", d3.forceRadial((n) => n.depth * RING, 0, 0).strength(0.35))
+  .velocityDecay(0.55) // more friction: nodes ease into place instead of overshooting
+  .alphaDecay(0.035)
+  .on("tick", ticked)
+  .on("end", () => {
+    if (fitWhenSettled) fitView(600);
+    fitWhenSettled = false;
   });
+
+let fitWhenSettled = true; // fit once the first layout settles, and after each root change
+
+// Zooms and pans so every visible node and its title fit between the rail and the panel.
+function fitView(duration) {
+  const ns = sim.nodes();
+  if (!ns.length) return;
+  const x0 = d3.min(ns, (n) => n.x - space(n)), x1 = d3.max(ns, (n) => n.x + space(n));
+  const y0 = d3.min(ns, (n) => n.y - n.r - 12), y1 = d3.max(ns, (n) => n.y + n.r + 40);
+  const left = rail.hidden ? 0 : rail.offsetWidth;
+  const right = selected !== null && !panel.hidden ? panel.offsetWidth : 0;
+  const w = innerWidth - left - right - 48, h = innerHeight - 120;
+  const k = Math.max(0.2, Math.min(1.4, w / (x1 - x0), h / (y1 - y0)));
+  const t = d3.zoomIdentity
+    .translate(left + 24 + w / 2, 72 + h / 2)
+    .scale(k)
+    .translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+  center = measure();
+  stopGlide();
+  (duration ? svg.transition().duration(duration).ease(EASE) : svg).call(zoom.transform, t);
+}
+
+// ---- Pan and zoom, with momentum ----
+
+// d3.zoom handles drag-to-pan. Wheel and trackpad input are handled below, so they can be smooth.
+const zoom = d3.zoom()
+  .scaleExtent([0.2, 3])
+  .filter((e) => e.type !== "wheel" && e.type !== "dblclick" && !e.button)
+  .on("start", (e) => {
+    if (e.sourceEvent) stopGlide();
+    samples = [];
+  })
+  .on("zoom", (e) => {
+    gView.attr("transform", e.transform);
+    if (e.sourceEvent?.type?.endsWith("move")) samples.push({ t: e.sourceEvent.timeStamp, x: e.transform.x, y: e.transform.y });
+  })
+  .on("end", (e) => e.sourceEvent && glide());
+svg.call(zoom);
+
+let samples = [];  // recent pan positions, to measure release speed
+let glider = null; // d3.timer for the coast after a pan
+let zoomer = null; // d3.timer that eases toward targetK
+let targetK = 1;
+let anchor = [0, 0];
+
+function stopGlide() {
+  glider?.stop();
+  glider = null;
+}
+
+// After a drag, keep moving at the release speed and slow down smoothly.
+function glide() {
+  const recent = samples.filter((p) => samples.at(-1).t - p.t < 80);
+  if (recent.length < 2) return;
+  const a = recent[0], b = recent.at(-1);
+  const dt = b.t - a.t || 1;
+  let vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt; // px per ms
+  if (Math.hypot(vx, vy) < 0.05) return;
+  let last = 0;
+  glider = d3.timer((elapsed) => {
+    const step = elapsed - last;
+    last = elapsed;
+    const decay = Math.exp(-step / 260);
+    vx *= decay;
+    vy *= decay;
+    const k = d3.zoomTransform(svg.node()).k;
+    svg.call(zoom.translateBy, (vx * step) / k, (vy * step) / k);
+    if (Math.hypot(vx, vy) < 0.01) stopGlide();
+  });
+}
+
+// Pinch (ctrlKey) and mouse wheels zoom; trackpad scrolling pans, with the system's own momentum.
+svg.node().addEventListener("wheel", (e) => {
+  e.preventDefault();
+  stopGlide();
+  const mouseWheel = e.deltaMode !== 0 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 50);
+  if (!e.ctrlKey && !mouseWheel) {
+    const k = d3.zoomTransform(svg.node()).k;
+    return svg.call(zoom.translateBy, -e.deltaX / k, -e.deltaY / k);
+  }
+  if (!zoomer) targetK = d3.zoomTransform(svg.node()).k;
+  targetK = Math.max(0.2, Math.min(3, targetK * Math.pow(2, -e.deltaY * (e.ctrlKey ? 0.012 : 0.0025))));
+  anchor = d3.pointer(e, svg.node());
+  zoomer ??= d3.timer(() => {
+    const k = d3.zoomTransform(svg.node()).k;
+    const next = k + (targetK - k) * 0.22;
+    svg.call(zoom.scaleTo, next, anchor);
+    if (Math.abs(targetK - next) < 0.001) {
+      zoomer.stop();
+      zoomer = null;
+    }
+  });
+}, { passive: false });
+
+// ---- Nodes ----
+
+// The root and every unpacked node's children; nothing inside a packed node.
+function visibleNodes() {
+  const out = [];
+  const walk = (d) => {
+    out.push(d);
+    if (isUnpacked(d)) for (const c of d.children ?? []) walk(c);
+  };
+  walk(graphRoot);
+  return out;
+}
+
+// Where a new child starts: on an arc around its parent, facing away from the grandparent.
+function fanOut(d) {
+  const p = pos.get(d.parent.data.path);
+  const g = d.parent.parent && pos.get(d.parent.parent.data.path);
+  const siblings = d.parent.children;
+  const i = siblings.indexOf(d);
+  let angle;
+  if (!g || d.parent === graphRoot) angle = (i / siblings.length) * 2 * Math.PI - Math.PI / 2;
+  else {
+    const away = Math.atan2(p.y - g.y, p.x - g.x);
+    const spread = Math.min(Math.PI * 1.2, siblings.length * 0.55);
+    angle = away + (siblings.length > 1 ? (i / (siblings.length - 1) - 0.5) * spread : 0);
+  }
+  const dist = radius(d.parent) + radius(d) + 100;
+  return { x: p.x + Math.cos(angle) * dist, y: p.y + Math.sin(angle) * dist };
+}
+
+function render() {
+  if (!graphRoot) return;
+  const shown = visibleNodes();
+  const nodes = shown.map((d) => {
+    let n = pos.get(d.data.path);
+    if (!n) {
+      n = { path: d.data.path, ...(d.parent && pos.has(d.parent.data.path) ? fanOut(d) : { x: 0, y: 0 }) };
+      pos.set(d.data.path, n);
+    }
+    n.d = d;
+    n.r = radius(d);
+    n.depth = d.depth - graphRoot.depth;
+    // The root is pinned at the centre; everything else moves freely.
+    n.fx = n.fy = d === graphRoot ? 0 : null;
+    return n;
+  });
+  const links = shown.filter((d) => d !== graphRoot).map((d) => ({ source: d.parent.data.path, target: d.data.path }));
+  sim.nodes(nodes);
+  sim.force("link").links(links);
+  const key = nodes.map((n) => n.path).join("|");
+  if (key !== shownKey) {
+    // A gentle nudge: new nodes already start near their place, so the rest barely moves.
+    sim.alpha(shownKey ? 0.3 : 1).restart();
+    shownKey = key;
+  }
+
+  const t = d3.transition().duration(GROW_MS).ease(EASE);
+  gLinks.selectAll("line")
+    .data(links, (l) => l.target.path)
+    .join(
+      (enter) => enter.append("line").style("opacity", 0).call((e) => e.transition(t).style("opacity", 1)),
+      (update) => update,
+      // Packed links shrink into the parent with their nodes.
+      (exit) => exit.classed("leaving", true).transition(t)
+        .attr("x2", (l) => l.source.x).attr("y2", (l) => l.source.y).style("opacity", 0).remove(),
+    );
+  gNodes.selectAll("g.node")
+    .data(nodes, (n) => n.path)
+    .join(
+      (enter) => enter.append("g").call(build).style("opacity", 0)
+        .call((e) => e.select(".body").attr("transform", "scale(0.25)"))
+        .call((e) => e.transition(t).style("opacity", 1).select(".body").attr("transform", "scale(1)")),
+      (update) => update,
+      // Packed nodes move back into their parent and shrink before they go.
+      (exit) => exit.classed("leaving", true).call((x) => x.transition(t)
+        .attr("transform", (n) => {
+          const p = pos.get(n.path.split("/").slice(0, -1).join("/"));
+          return `translate(${p?.x ?? n.x},${p?.y ?? n.y})`;
+        })
+        .style("opacity", 0)
+        .remove()
+        .select(".body").attr("transform", "scale(0.25)")),
+    )
+    .call(fill, t);
+  ticked();
+  renderCrumbs();
 }
 
 function build(g) {
   g.attr("class", "node").each(function () {
-    const n = d3.select(this);
-    const id = `arc${arcSeq++}`;
-    n.append("circle").attr("class", "rim");
-    n.append("path").attr("class", "arc").attr("id", id);
-    n.append("text").attr("class", "label").append("textPath").attr("href", `#${id}`).attr("startOffset", "50%");
-    n.append("text").attr("class", "title");
-    const badge = n.append("g").attr("class", "badge");
-    badge.append("circle").attr("r", 10);
-    badge.append("text").attr("dy", "0.35em");
-    n.append("g").attr("class", "sessions");
-    const info = n.append("g").attr("class", "info");
-    info.append("circle").attr("r", 8);
+    const body = d3.select(this).append("g").attr("class", "body");
+    body.append("circle").attr("class", "pulse");
+    body.append("circle").attr("class", "halo");
+    body.append("circle").attr("class", "rim");
+    body.append("circle").attr("class", "inner");
+    body.append("text").attr("class", "count").attr("dy", "0.35em");
+    body.append("text").attr("class", "title");
+    body.append("text").attr("class", "label");
+    body.append("g").attr("class", "sessions");
+    const info = body.append("g").attr("class", "info");
+    info.append("circle").attr("r", 7);
     info.append("text").attr("dy", "0.35em").text("i");
   });
-  g.on("click", (e, d) => {
+  g.on("click", (e, n) => {
     e.stopPropagation();
-    d.children ? go(d) : select(d.data.path);
+    if (!n.d.children || n.d === graphRoot) select(n.path);
+    else toggle(n.d);
   });
   g.select(".info").on("click", function (e) {
     e.stopPropagation();
-    select(d3.select(this.parentNode).datum().data.path);
+    select(d3.select(this.parentNode.parentNode).datum().path);
   });
+  g.call(d3.drag()
+    .on("start", (e, n) => {
+      if (!e.active) sim.alphaTarget(0.12).restart();
+      n.fx = n.x;
+      n.fy = n.y;
+    })
+    .on("drag", (e, n) => {
+      n.fx = e.x;
+      n.fy = e.y;
+    })
+    .on("end", (e, n) => {
+      if (!e.active) sim.alphaTarget(0);
+      if (n.d !== graphRoot) n.fx = n.fy = null;
+    }));
 }
 
-function fill(sel) {
-  sel.attr("class", (d) => `node a-${stateOf(d)}${d.data.path === selected ? " selected" : ""}`);
-  sel.select(".sessions").call(drawDots);
-  sel.select(".label textPath").text((d) => rimText(d));
-  sel.select(".title").each(function (d) { wrapTitle(d3.select(this), d.data.title); });
-  sel.select(".badge").style("display", (d) => (d.children ? null : "none")).select("text").text((d) => d.data.childCount);
-  sel.select(".info").style("display", (d) => (d.children ? null : "none"));
+// A packed node shows the most urgent state of everything it hides; an unpacked one, only its own.
+const nodeSessions = (d) => (isUnpacked(d) ? withNode(d) : sessionsIn(d));
+const kindOf = (d) => (d === graphRoot ? "is-root" : !d.children ? "leaf" : isUnpacked(d) ? "open" : "packed");
+
+// Sizes animate, so a node grows or shrinks smoothly when it is packed or unpacked.
+function fill(sel, t = d3.transition().duration(0)) {
+  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.path === selected ? " selected" : ""}`);
+  sel.select(".halo").transition(t).attr("r", (n) => (n.d === graphRoot ? n.r + 6 : 0));
+  sel.select(".rim").transition(t).attr("r", (n) => n.r);
+  sel.select(".pulse").transition(t).attr("r", (n) => n.r);
+  sel.select(".inner").transition(t).attr("r", (n) => (n.d.children && n.d !== graphRoot ? n.r * 0.6 : 0));
+  sel.select(".count").text((n) => (!n.d.children || n.d === graphRoot ? "" : isUnpacked(n.d) ? "–" : `+${n.d.children.length}`));
+  sel.select(".title").text((n) => n.d.data.title).transition(t).attr("y", (n) => n.r + (n.d === graphRoot ? 24 : 16));
+  sel.select(".label").text((n) => rimText(n.d)).transition(t).attr("y", (n) => n.r + (n.d === graphRoot ? 37 : 29));
+  sel.select(".info").style("display", (n) => (n.d.children && n.d !== graphRoot ? null : "none"))
+    .transition(t).attr("transform", (n) => `translate(${n.r * Math.SQRT1_2},${-n.r * Math.SQRT1_2})`);
+  sel.select(".sessions").each(function (n) { drawDots(d3.select(this), n); });
 }
 
-// Counts cover the whole subtree, because the map does not draw below the children.
 function rimText(d) {
-  const states = sessionsIn(d).map(sessionState);
+  const states = nodeSessions(d).map(sessionState);
   const count = (st) => states.filter((x) => x === st).length;
   return [
     count("needs") && "needs you",
@@ -186,91 +427,63 @@ function rimText(d) {
   ].filter(Boolean).join("  ·  ").toUpperCase();
 }
 
-// One dot per session, spaced along the lower-left rim. Radius is set in position() / drawRing().
-function drawDots(g) {
+// One dot per session of the node itself, spaced along the lower-left rim.
+function drawDots(g, n) {
   g.selectAll("g.dot")
-    .data((d) => d.data.sessions, (s) => s.sessionId)
+    .data(n.d.data.sessions, (s) => s.sessionId)
     .join((enter) => {
       const dot = enter.append("g");
       dot.append("g").attr("class", "spin").append("circle");
       return dot;
     })
     .attr("class", (s) => `dot ${sessionState(s)}`)
-    .attr("transform", (_, i) => `rotate(${135 + i * 12})`)
+    .attr("transform", (_, i) => `rotate(${135 + i * 18})`)
     .select("circle")
-    .attr("r", (s) => (["needs", "new"].includes(sessionState(s)) ? 5 : 3.5));
+    .attr("cx", n.r)
+    .attr("r", (s) => (["needs", "new"].includes(sessionState(s)) ? 4.5 : 3));
 }
 
-function wrapTitle(text, title) {
-  const lines = [];
-  for (const word of title.split(/\s+/)) {
-    const last = lines.at(-1);
-    if (last && `${last} ${word}`.length <= 14) lines[lines.length - 1] = `${last} ${word}`;
-    else lines.push(word);
-  }
-  if (lines.length > 3) (lines.length = 3), (lines[2] += "…");
-  text.selectAll("tspan").data(lines).join("tspan")
-    .attr("x", 0)
-    .attr("dy", (_, i) => (i ? "1.1em" : `${0.35 - (lines.length - 1) * 0.55}em`))
-    .text((l) => l);
+function ticked() {
+  gNodes.selectAll("g.node:not(.leaving)").attr("transform", (n) => `translate(${n.x},${n.y})`);
+  gLinks.selectAll("line:not(.leaving)")
+    .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
+    .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
 }
 
-// Places every drawn node for the current view. Runs once per animation frame.
-function position() {
-  const k = geo.R / view[2];
-  gNodes.selectAll("g.node").each(function (d) {
-    const x = geo.cx + (d.x - view[0]) * k;
-    const y = geo.cy + (d.y - view[1]) * k;
-    const r = d.r * k * SHRINK;
-    const ar = Math.max(r - 13, 1);
-    const n = d3.select(this);
-    n.select(".rim").attr("cx", x).attr("cy", y).attr("r", r);
-    n.select(".arc").attr("d", `M${x - ar},${y}A${ar},${ar} 0 0 1 ${x + ar},${y}`);
-    n.select(".label").style("display", r < 56 ? "none" : null);
-    n.select(".title")
-      .attr("transform", `translate(${x},${y})`)
-      .style("font-size", `${Math.max(11, Math.min(26, r * 0.19))}px`)
-      .style("display", r < 30 ? "none" : null);
-    n.select(".badge").attr("transform", `translate(${x},${y + r})`);
-    n.select(".sessions").attr("transform", `translate(${x},${y})`).selectAll("circle").attr("cx", r);
-    n.select(".info").attr("transform", `translate(${x + r * Math.SQRT1_2},${y + r * Math.SQRT1_2})`);
-  });
-}
-
-function buildRing() {
-  gRing.append("circle").attr("class", "ring-line");
-  gRing.append("g").attr("class", "ticks").selectAll("line").data(d3.range(120)).join("line")
-    .classed("major", (i) => i % 10 === 0);
-  gRing.append("path").attr("id", "ring-arc").attr("fill", "none");
-  gRing.append("text").attr("class", "ring-label").append("textPath").attr("href", "#ring-arc").attr("startOffset", "50%");
-  gRing.append("g").attr("class", "sessions");
-  gRing.append("text").attr("class", "empty").attr("dy", "0.35em").text("NO CHILD NODES");
-}
-
-function drawRing() {
-  const { cx, cy, R } = geo;
-  const lr = R + 30;
-  gRing.select(".ring-line").attr("cx", cx).attr("cy", cy).attr("r", R);
-  gRing.select(".ticks").attr("transform", `translate(${cx},${cy})`).selectAll("line")
-    .attr("y1", -R - 5)
-    .attr("y2", (i) => -R - (i % 10 === 0 ? 15 : 9))
-    .attr("transform", (i) => `rotate(${i * 3})`);
-  gRing.select("#ring-arc").attr("d", `M${cx - lr},${cy}A${lr},${lr} 0 0 1 ${cx + lr},${cy}`);
-  gRing.select(".empty").attr("x", cx).attr("y", cy);
-  gRing.select(".sessions").attr("transform", `translate(${cx},${cy})`).selectAll("circle").attr("cx", R);
-}
-
+// The free space between the rail and the panel.
 function measure() {
   const left = rail.hidden ? 0 : rail.offsetWidth;
-  const w = innerWidth - left - (selected !== null ? panel.offsetWidth : 0);
-  const h = innerHeight;
-  return { cx: left + w / 2, cy: h / 2 + 16, R: Math.max(80, Math.min(w, h) / 2 - 84) };
+  const right = selected !== null && !panel.hidden ? panel.offsetWidth : 0;
+  return { cx: left + (innerWidth - left - right) / 2, cy: innerHeight / 2 + 20 };
 }
 
-// ---- Rail: every session under the lock, most urgent first ----
+// Puts the root at the centre of the free space, keeping the zoom level.
+function centerView(duration) {
+  center = measure();
+  const k = d3.zoomTransform(svg.node()).k;
+  const t = d3.zoomIdentity.translate(center.cx, center.cy).scale(k);
+  (duration ? svg.transition().duration(duration) : svg).call(zoom.transform, t);
+}
+
+// When the rail or the panel opens or closes, shift the view by the change in free space.
+function relayout(duration) {
+  termview.style.left = `${rail.hidden ? 0 : rail.offsetWidth}px`;
+  const next = measure();
+  const k = d3.zoomTransform(svg.node()).k;
+  const dx = (next.cx - center.cx) / k;
+  const dy = (next.cy - center.cy) / k;
+  center = next;
+  if (dx || dy) (duration ? svg.transition().duration(duration) : svg).call(zoom.translateBy, dx, dy);
+}
+
+// ---- Rail: every session under the root, most urgent first ----
+
+// Queue workers stay off the rail unless they are blocked on you.
+const railSessions = () => sessionsIn(graphRoot).filter((s) => !s.background || sessionState(s) === "needs");
 
 function renderRail() {
-  const sessions = sessionsIn(lockNode() ?? root).sort(
+  if (!graphRoot) return;
+  const sessions = railSessions().sort(
     (a, b) => STATES.indexOf(sessionState(a)) - STATES.indexOf(sessionState(b)) || b.updatedAt.localeCompare(a.updatedAt),
   );
   const attention = sessions.filter((s) => ["needs", "new"].includes(sessionState(s))).length;
@@ -294,58 +507,26 @@ rail.addEventListener("click", async (e) => {
   if (endButton) return endSession(endButton);
   const row = e.target.closest("button[data-sid]");
   if (!row) return;
-  const s = sessionsIn(root).find((x) => x.sessionId === row.dataset.sid);
-  const d = byPath.get(row.dataset.path);
-  if (!s || !d) return;
+  const s = sessionsIn(tree).find((x) => x.sessionId === row.dataset.sid);
+  if (!s || !byPath.has(row.dataset.path)) return;
   // In terminal mode, switch terminals without touching the map.
-  if (term && s.tmux) return openTerminal(s.tmux, d.data.path, s.host);
-  // Focus the parent so the node's circle is on screen.
-  location.hash = hashFor((d.parent ?? d).data.path);
-  await select(d.data.path);
-  if (s.tmux) openTerminal(s.tmux, d.data.path, s.host);
+  if (term && s.tmux) return openTerminal(s.tmux, s.path, s.host);
+  reveal(s.path);
+  await select(s.path);
+  if (s.tmux) openTerminal(s.tmux, s.path, s.host);
   else markSeen([s]);
 });
 
-function relayout(duration) {
-  termview.style.left = `${rail.hidden ? 0 : rail.offsetWidth}px`;
-  const from = geo;
-  const to = measure();
-  if (!duration) {
-    geo = to;
-    drawRing();
-    return view && position();
-  }
-  const i = d3.interpolateObject(from, to);
-  svg.transition("geo").duration(duration).ease(d3.easeCubicInOut).tween("geo", () => (t) => {
-    geo = i(t);
-    drawRing();
-    position();
-  });
-}
-
-// The lock is per browser. The locked node is the top of the map: zooming out stops there.
-function getLock() {
-  try { return localStorage.getItem("orca.lock"); } catch { return null; }
-}
-function setLock(p) {
-  try { p === null ? localStorage.removeItem("orca.lock") : localStorage.setItem("orca.lock", p); } catch {}
-}
-const lockNode = () => byPath.get(getLock()) ?? null;
-
+// The trail from the top of the tree to the root. Click a step to make it the root.
 function renderCrumbs() {
-  const lock = lockNode();
-  lockButton.textContent = lock ? "Unlock" : "Lock";
-  lockButton.classList.toggle("on", !!lock);
   crumbs.replaceChildren();
-  const trail = focus.ancestors().reverse();
-  trail.slice(lock ? trail.indexOf(lock) : 0).forEach((d, i, all) => {
+  graphRoot.ancestors().reverse().forEach((d, i, all) => {
     if (i) crumbs.append(Object.assign(document.createElement("span"), { className: "sep", textContent: "/" }));
     const here = i === all.length - 1;
     const el = document.createElement(here ? "span" : "a");
     el.textContent = d.data.title;
     if (here) el.className = "here";
     else el.href = hashFor(d.data.path);
-    if (d === lock) el.classList.add("locked");
     crumbs.append(el);
   });
 }
@@ -355,7 +536,7 @@ function renderCrumbs() {
 async function select(p) {
   editing = false;
   selected = p;
-  gNodes.selectAll("g.node").classed("selected", (d) => d.data.path === selected);
+  gNodes.selectAll("g.node").classed("selected", (n) => n.path === selected);
   panelText = "";
   await refreshPanel();
   if (panel.hidden) {
@@ -405,7 +586,9 @@ function renderPanel(n) {
     <div class="actions">
       <button data-form="edit" type="button">Edit</button>
       <button data-form="child" type="button">Add child</button>
+      <button data-form="queue" type="button">Queue</button>
       ${n.path ? `<button data-form="move" type="button">Move</button><button data-form="remove" type="button">Delete</button>` : ""}
+      ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
     </div>
     <form class="form" hidden></form>
     ${renderSessions(n.sessions)}
@@ -489,7 +672,7 @@ async function endSession(button) {
     }, 3000);
     return;
   }
-  const s = sessionsIn(root).find((x) => x.sessionId === id);
+  const s = sessionsIn(tree).find((x) => x.sessionId === id);
   if (s && isOpen(s)) closeTerminal();
   try {
     await post("end", { session: id });
@@ -524,6 +707,9 @@ const FORMS = {
   dispatch: (n) => `
     ${field(`What needs doing under ${esc(n.title)}?`, `<textarea name="prompt" rows="6" required placeholder="Plain instructions. Orca files it into the tree and starts Claude on it."></textarea>`)}
     <div class="row"><button type="submit">Dispatch</button><button class="cancel" type="button">Cancel</button>${whereSelect()}<span class="hint">⌘↵</span></div>`,
+  queue: (n) => `
+    ${field(`Tasks for ${esc(n.title)}, one per line`, `<textarea name="tasks" rows="6" required placeholder="Each line becomes a background worker. Orca merges its work and checks it off in the ## Queue section."></textarea>`)}
+    <div class="row"><button type="submit">Queue</button><button class="cancel" type="button">Cancel</button><span class="hint">⌘↵</span></div>`,
   remove: (n) => `
     <p class="hint">Moves ${esc(n.path)} and everything under it to <code>.trash</code> in the node root.</p>
     <div class="row"><button class="danger" type="submit">Delete</button><button class="cancel" type="button">Cancel</button></div>`,
@@ -564,18 +750,22 @@ async function submitForm(form) {
       await post("update", { path: n.path, ...v });
     } else if (kind === "child") {
       await post("create", { path: n.path ? `${n.path}/${v.name}` : v.name, title: v.title, goal: v.goal });
-      location.hash = hashFor(n.path); // zoom into the parent so the new child shows
+      if (n.path !== graphRoot.data.path) expanded.add(n.path); // unpack the parent so the new child shows
+      writeExpanded();
+    } else if (kind === "queue") {
+      for (const task of v.tasks.split("\n").filter((t) => t.trim())) await post("queue", { path: n.path, task });
     } else if (kind === "move") {
       const to = (await post("move", { from: n.path, to: v.to.replace(/^\/+|\/+$/g, "") })).path;
-      if (getLock() !== null) setLock(rebase(getLock(), n.path, to));
+      expanded = new Set([...expanded].map((p) => rebase(p, n.path, to)));
+      writeExpanded();
       selected = to;
-      location.hash = hashFor(rebase(focus.data.path, n.path, to));
+      if (within(graphRoot.data.path, n.path)) setRoot(rebase(graphRoot.data.path, n.path, to));
+      else reveal(to);
     } else if (kind === "remove") {
       await post("remove", { path: n.path });
-      if (getLock() !== null && within(getLock(), n.path)) setLock(null);
       closePanel();
       const parent = n.path.split("/").slice(0, -1).join("/");
-      if (within(focus.data.path, n.path)) location.hash = hashFor(parent);
+      if (within(graphRoot.data.path, n.path)) setRoot(parent);
     }
   } catch (err) {
     const el = form.querySelector(".err");
@@ -596,8 +786,7 @@ async function submitDispatch(form, n, prompt, host) {
     const d = await post("dispatch", { path: n.path, prompt, host });
     editing = false;
     await load();
-    const target = byPath.get(d.path);
-    if (target?.parent) location.hash = hashFor(target.parent.data.path);
+    reveal(d.path);
     await select(d.path);
     openTerminal(d.tmux, d.path, d.host);
   } catch (err) {
@@ -621,7 +810,7 @@ panel.addEventListener("submit", (e) => {
 // ---- Terminal ----
 
 // Terminal mode is the detailed view; the map is the default. Esc always leads back to the map.
-async function openTerminal(name, path = selected ?? focus.data.path, host = undefined) {
+async function openTerminal(name, path = selected ?? graphRoot.data.path, host = undefined) {
   await document.fonts.load("13px 'Azeret Mono'");
   if (term) stopTerminal();
   document.body.classList.add("mode-term");
@@ -671,7 +860,7 @@ async function openTerminal(name, path = selected ?? focus.data.path, host = und
   ro.observe(el);
   term = { xterm, ws, ro, name, path, host };
   lastTerm = { name, path, host };
-  markSeen(sessionsIn(root).filter((s) => isOpen(s)));
+  markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   renderRail();
   xterm.focus();
 }
@@ -690,9 +879,8 @@ function closeTerminal(toSession = true) {
   document.body.classList.remove("mode-term");
   termview.hidden = true;
   renderRail();
-  const d = byPath.get(path);
-  if (d && toSession) {
-    location.hash = hashFor((d.parent ?? d).data.path);
+  if (byPath.has(path) && toSession) {
+    reveal(path);
     select(path);
   }
   relayout(0);
@@ -700,7 +888,7 @@ function closeTerminal(toSession = true) {
 
 function toggleTerminal() {
   if (term) return closeTerminal();
-  if (lastTerm && sessionsIn(root).some((s) => isOpen(s, lastTerm))) openTerminal(lastTerm.name, lastTerm.path, lastTerm.host);
+  if (lastTerm && sessionsIn(tree).some((s) => isOpen(s, lastTerm))) openTerminal(lastTerm.name, lastTerm.path, lastTerm.host);
 }
 
 panel.addEventListener("click", (e) => {
@@ -716,33 +904,31 @@ panel.addEventListener("click", (e) => {
   if (adopt) adoptSession(adopt);
   const attach = e.target.closest(".attach");
   if (attach) openTerminal(attach.dataset.tmux, selected, attach.dataset.host || undefined);
+  const rootButton = e.target.closest("[data-root]");
+  if (rootButton) setRoot(rootButton.dataset.root);
   const copy = e.target.closest(".copy");
   if (copy) navigator.clipboard.writeText(panelFile).then(() => (copy.textContent = "Copied"));
 });
 
 // ---- Wiring ----
 
-document.getElementById("about").addEventListener("click", () => focus && select(focus.data.path));
-// Header forms act on the node you are in.
+document.getElementById("about").addEventListener("click", () => graphRoot && select(graphRoot.data.path));
+// Header forms act on the root of the graph.
 async function openFocusForm(kind) {
-  if (!focus) return;
-  await select(focus.data.path);
+  if (!graphRoot) return;
+  await select(graphRoot.data.path);
   openForm(kind);
 }
 document.getElementById("new").addEventListener("click", () => openFocusForm("child"));
 document.getElementById("dispatch").addEventListener("click", () => openFocusForm("dispatch"));
-svg.on("click", up);
+svg.on("click", () => selected !== null && closePanel());
 addEventListener("hashchange", () => {
-  if (!root) return;
+  if (!tree) return;
   if (term) closeTerminal(false); // a breadcrumb click in terminal mode goes where it points
-  show(nodeAt(pathFromHash()), DURATION);
+  applyRoot();
 });
 document.getElementById("mapbtn").addEventListener("click", () => term && closeTerminal());
 addEventListener("resize", () => relayout(0));
-lockButton.addEventListener("click", () => {
-  setLock(lockNode() ? null : focus.data.path);
-  renderCrumbs();
-});
 addEventListener("keydown", (e) => {
   if (e.key === "." && e.metaKey) {
     e.preventDefault();
@@ -750,13 +936,14 @@ addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape" && term) return closeTerminal(); // terminal not focused
   const typing = e.target.closest?.("input, textarea, select, .xterm");
+  if (e.key === "f" && !typing && !term && !e.metaKey && !e.ctrlKey) return fitView(500);
   if (e.key === "/" && !typing && !term) {
     e.preventDefault();
     return openFocusForm("dispatch");
   }
   if (e.key !== "Escape" || term) return;
   if (editing) return closeForm();
-  selected !== null ? closePanel() : up();
+  if (selected !== null) closePanel();
 });
 
 // ---- Plan usage ----
@@ -781,10 +968,9 @@ async function loadUsage() {
   }));
 }
 
-// The bare URL opens the locked node.
-if (!location.hash && getLock() !== null) history.replaceState(null, "", hashFor(getLock()));
-buildRing();
-relayout(0);
+// The bare URL opens the last root.
+if (!location.hash && storedRoot() !== null) history.replaceState(null, "", hashFor(storedRoot()));
+centerView(0);
 load();
 setInterval(load, POLL_MS);
 loadUsage();

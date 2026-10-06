@@ -14,7 +14,7 @@ const today = () => new Date().toLocaleDateString("sv");
 export class EditError extends Error {}
 
 // Returns the paths of every node created, parents first.
-export function createNode(root: string, rel: string, fields: { title?: string; goal?: string; context?: string }): string[] {
+export function createNode(root: string, rel: string, fields: { title?: string; goal?: string; context?: string; background?: boolean }): string[] {
   const dir = nodeDir(root, rel);
   const file = path.join(dir, "CLAUDE.md");
   if (fs.existsSync(file)) throw new EditError(`${rel} already exists`);
@@ -31,7 +31,7 @@ export function createNode(root: string, rel: string, fields: { title?: string; 
   }
 
   fs.mkdirSync(dir, { recursive: true });
-  const frontmatter = stringify({ title: fields.title || segments.at(-1) });
+  const frontmatter = stringify({ title: fields.title || segments.at(-1), ...(fields.background && { background: true }) });
   const goal = fields.goal ? `## Goal\n${fields.goal}\n\n` : "";
   let text = fs.readFileSync(TEMPLATE, "utf8")
     .replace("{{frontmatter}}", frontmatter).replace("{{goal}}", goal).replace("{{date}}", today());

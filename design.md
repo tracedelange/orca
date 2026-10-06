@@ -1,64 +1,73 @@
-# Node Tree: Phase 1 Build Spec
+# Orca: Design
 
 ## Purpose
 
-This project is the first piece of an attention-first workspace for agent-driven work. The long-term tool will let one person manage several Claude Code sessions across many projects without holding the whole map in their head. The scarce resource it manages is the person's attention, not agents or compute.
+Orca is an attention-first workspace for agent-driven work. It lets one person manage many Claude Code sessions across many projects without holding the whole map in their head. The scarce resource that orca manages is the person's attention, not agents or compute.
 
-Phase 1 builds only the foundation: a hierarchical tree of **nodes** stored on disk, and a web viewer for exploring that tree as nested, zoomable bubbles. No agents are launched or managed in Phase 1. The goal is to find out whether the map itself is useful before any orchestration is built on top of it.
+Orca has two parts:
 
-Later phases are described at the end of this document. They are out of scope for this build, but the Phase 1 design must not make them harder.
+- A tree of **nodes**, stored as folders on disk.
+- A web viewer that shows the tree as a force-directed graph, and shows which sessions need the person.
 
 ## Environment
 
-- Runs on a single Linux workstation. The user reaches it over SSH via Tailscale.
-- The viewer is opened in a browser on another machine on the same tailnet.
-- Single user. No authentication beyond tailnet membership.
-- Node 22 and TypeScript throughout.
+- One machine is the **hub**. The hub holds the node tree, runs the orca server, and runs the viewer in a browser. The hub is a macOS laptop.
+- Zero or more other machines are **workers**. A worker runs Claude sessions for the hub. The hub reaches a worker only with `ssh <host>`, for example with Tailscale SSH.
+- The hub needs Node 22.18 or later, tmux, and Claude Code. Node runs the TypeScript source directly, so there is no build step.
+- A worker needs Node 18 or later, tmux, and Claude Code. A worker runs only plain JavaScript files.
+- Orca has one user. It has no accounts and no identity checks.
 
 ## Core concepts
 
-**Node.** A durable unit in the tree. It holds context, an optional goal, and notes. A node exists whether or not any work is happening on it.
+**Node.** A durable unit of work in the tree. A node holds context, an optional goal, and notes. A node exists when no work happens on it.
 
-**Session (future).** An ephemeral Claude Code instance attached to a node to do a bounded piece of work. A node can have zero, one, or several sessions. Sessions are not nodes, and a leaf node is not a session. Phase 1 has no sessions, but this distinction drives the data model.
+**Session.** One Claude Code process that works on a node. A node can have zero, one, or many sessions. A session is not a node, and a leaf node is not a session.
 
-**Containment is implicit.** There is no container type. A node renders as a container when it has child nodes and as a leaf when it does not. Any node can gain children at any time.
+**Containment is implicit.** There is no container type. A node shows as a container when it has child nodes, and as a leaf when it has none. Any node can get children at any time.
 
-**Goals vary by altitude.** Upper nodes (for example `work`, `personal`) are mostly organizational and may have no goal. Goals matter most at the project level and below. A child may restate, sharpen, or ignore its parent's goal. Nothing enforces inheritance.
+**Goals vary by altitude.** Upper nodes, for example `work` and `personal`, are mostly organizational and often have no goal. Goals matter most at the project level and below. Nothing enforces inheritance of goals.
+
+**State comes from sessions.** A node has no state field that a person sets. Its state is the most urgent state of the sessions in its subtree.
 
 ## Data model: the filesystem is the database
 
-There is no database. The tree is a directory tree.
+There is no database. The node tree is a folder tree.
 
-- The root directory is configurable. Default: `~/nodes`.
-- A **node** is any directory that contains a `CLAUDE.md` file.
-- A node's **children** are its immediate subdirectories that are themselves nodes.
-- Directories without a `CLAUDE.md` are ignored, along with their contents. Hidden directories (names starting with `.`) and `node_modules` are always skipped.
-- A node's identity is its path relative to the root, for example `work/vmt-analyzer`.
+- The root folder is `~/nodes`. The environment variable `NODES_ROOT` changes it.
+- A **node** is a folder that contains a `CLAUDE.md` file.
+- The **children** of a node are its immediate subfolders that are nodes.
+- Folders without a `CLAUDE.md` are not nodes, and their contents are not read. Hidden folders (names that start with `.`) and `node_modules` are always skipped.
+- The identity of a node is its path relative to the root, for example `work/vmt-analyzer`.
 
 ### Why CLAUDE.md
 
-When Claude Code starts in a directory, it loads every `CLAUDE.md` from that directory up through its ancestors. Making each node a folder with a `CLAUDE.md` means a future session launched in a node automatically receives that node's context plus the context of every node above it. Hierarchical context costs nothing to implement.
+When Claude Code starts in a folder, it loads every `CLAUDE.md` from that folder up through its ancestors. Each node is a folder with a `CLAUDE.md`. As a result, a session in a node gets the context of that node and of every node above it. Hierarchical context costs nothing to implement. This behavior was tested with `/memory` in Claude Code.
 
-The consequence is that ancestor files are loaded in full into every descendant session. **Organizational nodes must stay short.** The viewer should flag any node with children whose `CLAUDE.md` body exceeds 40 lines (a soft warning, not an error).
+The ancestor files load in full into every session below them. For this reason, organizational nodes must stay short. `nodes check` gives a warning for a node with children whose `CLAUDE.md` body is more than 40 lines.
+
+Claude Code removes YAML frontmatter before it loads a `CLAUDE.md`. Agents do not see frontmatter fields. For this reason, the goal of a node is in the body, not in the frontmatter.
 
 ### Node file format
 
-Each `CLAUDE.md` has YAML frontmatter followed by a Markdown body.
+Each `CLAUDE.md` has YAML frontmatter and then a Markdown body.
 
 ```markdown
 ---
 title: VMT Analyzer
-goal: Ship a contract-ready VMT mitigation model for the first pilot
-status: active
-repo: ~/code/vmt-analyzer
+repo:
+  - ~/code/vmt-analyzer
+  - my-worker:~/code/vmt-analyzer
 branch: main
 ---
 
+## Goal
+Ship a contract-ready VMT mitigation model for the first pilot.
+
 ## Context
-What this node is, why it exists, and anything an agent working here must know.
+What this node is, why it exists, and anything an agent that works here must know.
 
 ## Notes
-The user's own input: decisions, constraints, open questions, direction.
+Decisions, constraints, open questions, direction.
 
 ## Log
 - 2026-10-02: Node created.
@@ -68,77 +77,246 @@ Frontmatter fields:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `title` | yes | Display name. Falls back to the directory name if missing. |
-| `goal` | no | One sentence describing what progress means here. Omit on organizational nodes. |
-| `status` | no | One of `idle`, `active`, `waiting`, `done`, `dormant`. Default `idle`. |
-| `repo` | no | Path to the code this node works on, if any. |
-| `branch` | no | The git branch work happens on, if any. |
+| `title` | yes | Display name. If it is missing, the viewer uses the folder name. |
+| `repo` | no | One path or a list of paths to the code of this node. A path with a `<worker>:` prefix is a path on that worker. |
+| `branch` | no | The git branch for the work, if there is one. |
+| `background` | no | `true` on a queue worker node. The map shows its sessions. The rail shows them only when they need you. |
 
-Unknown frontmatter fields are preserved and shown in the viewer but otherwise ignored. A file with missing or malformed frontmatter is still a valid node; the viewer shows it with a warning badge rather than dropping it.
+The body sections:
 
-In Phase 1 the user sets `status` by hand. In Phase 2, machine-written state (session status, last summary) will move into a hidden `.node/` directory inside each node, so hooks never rewrite `CLAUDE.md`. Do not create `.node/` in Phase 1, but treat the name as reserved.
+| Section | Meaning |
+|---|---|
+| `## Goal` | One sentence that says what progress means. Organizational nodes omit it. |
+| `## Context` | What the node is and why it exists. Dispatch and claims write the starting prompt here. |
+| `## Notes` | The person's input: decisions, constraints, open questions. |
+| `## Queue` | A checklist of tasks for background workers. The server runs it (see Queues). |
+| `## Log` | Dated lines. Agents add a line when they change the node. |
+
+Unknown frontmatter fields stay in the file, and the viewer shows them. Old `status` and `goal` frontmatter fields are not used. The viewer ignores `status`. If a file has `goal` in its frontmatter, the viewer shows it, and `nodes check` gives a warning that agents cannot see it.
+
+A file with missing or malformed frontmatter is still a valid node. The viewer shows it with an issue count and does not drop it.
+
+### Machine-written state
+
+Orca never writes machine state into `CLAUDE.md`. Machine state is in hidden folders:
+
+| Path | Contents |
+|---|---|
+| `<node>/.node/sessions/<session-id>.json` | State of each local session on the node. The hook writes it. |
+| `<root>/.orca/claims/<pid>.json` | Claims. A claim attaches a Claude process to a node, whatever its folder. |
+| `<root>/.orca/workers.json` | The list of workers, with host and name. |
+| `<root>/.trash/` | Deleted nodes. Delete moves a node here, so a delete is reversible. |
+| `~/.orca/sessions/` on a worker | State of each session on that worker. |
+
+A session file has these fields: `sessionId`, `pid`, `cwd`, `tmux`, `state`, `summary`, `finishedAt`, `updatedAt`. Worker sessions also have `host` and `node`.
 
 ### Root conventions file
 
-The root `~/nodes/CLAUDE.md` is itself a node (the root of the tree) and also documents the conventions above in plain language: what a node is, the file format, and how to create a child node. Any agent launched anywhere in the tree inherits this file, so every agent knows how to create subnodes without a special API. Keep it under 40 lines.
+The root `~/nodes/CLAUDE.md` is the root node. It also explains the conventions in plain language: what a node is, the file format, how to create a child node, and the reporting rule. Every session in the tree loads this file, so every agent knows how to create nodes without a special API. The file is less than 40 lines.
+
+The reporting rule tells agents to end every reply with one line: `Status: <one sentence on where things stand>`. Orca uses this line as the summary of the session.
+
+## Session tracking
+
+### The hook
+
+`nodes install-hooks` adds the orca hook to `~/.claude/settings.json` for six events: `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Notification`, `Stop`, and `SessionEnd`. Other hooks in that file stay. The command keeps a backup at `settings.json.orca-backup`. `nodes install-hooks --remove` removes the orca hook.
+
+The hook runs in every Claude session on the hub. It never fails a session. If it cannot find a node for a session, it does nothing.
+
+The hook finds the node of a session in this order:
+
+1. `ORCA_NODE`. Orca sets this environment variable on every session that it starts.
+2. A claim for the Claude process of the session.
+3. The folder of the session, when the folder is inside the node tree. The nearest node above the folder wins.
+4. A `repo` path of a node that contains the folder. The most specific path wins.
+
+When a session outside the tree starts, the hook adds the `CLAUDE.md` chain of its node to the context of the session. This gives that session the same context as a session inside the node.
+
+### Session states
+
+| Hook event | Session state |
+|---|---|
+| `UserPromptSubmit`, `PostToolUse` | `working` |
+| `Notification` with `permission_prompt`, `elicitation_dialog`, or `agent_needs_input` | `needs-input` |
+| `SessionStart`, `Stop` | `ready` |
+| `SessionEnd` | The hook removes the session file. |
+
+On `Stop`, the hook records `finishedAt` and takes the last `Status:` line from the reply as the summary.
+
+A session stays live while its Claude process runs. The server removes a session file when its process ID is no longer alive.
+
+### Claims and the orca skill
+
+`nodes install-hooks` also installs the `/orca` skill at `~/.claude/skills/orca/`. In a session in any folder, the skill registers the session with orca:
+
+- If the person names a node path, the skill runs `nodes claim <path>`. The node is created if it does not exist.
+- If the person names no node, Claude writes one or two sentences about the session, and the skill runs `nodes claim --auto "<sentences>"`. Placement (see Dispatch) picks or creates the node.
+
+`nodes claim` finds the Claude process above it and writes a claim for that process. It then prints the `CLAUDE.md` chain of the node, so the session learns its goal and the reporting rule. A claim ends when its process exits.
+
+### Moving a session into orca
+
+The viewer can show a terminal only for a session that runs in tmux. A session in a normal terminal window belongs to that terminal app.
+
+"Move into orca" (`nodes adopt <session-id>`) moves such a session into tmux:
+
+1. Orca sends SIGTERM to the Claude process. Claude saves the conversation and exits.
+2. Orca starts `claude --resume <session-id>` in tmux, in the same folder, with `ORCA_NODE` set.
+
+The move is possible only when the session state is `ready`, so it never stops a turn.
 
 ## Components
 
 ### 1. CLI: `nodes`
 
-A small TypeScript CLI, installed globally on the workstation.
+A TypeScript CLI. `npm link` puts it on the `PATH`.
 
-- `nodes new <path> [--title "..."] [--goal "..."]` creates the directory (and any missing parents as nodes with only a `title`), writes a `CLAUDE.md` from the template above, and adds a dated "Node created" log line. It refuses to overwrite an existing `CLAUDE.md`.
-- `nodes tree` prints the tree to the terminal with status markers.
-- `nodes check` validates every node: parse errors, missing titles, unknown status values, oversized organizational nodes. Exits non-zero on errors (not warnings).
-- `nodes init` scaffolds the root directory with the root conventions file and the seed tree below, if the root does not exist yet.
+| Command | What it does |
+|---|---|
+| `nodes init` | Creates the root folder with the root conventions file and the seed tree, if the root does not exist. |
+| `nodes new <path> [--title] [--goal]` | Creates a node. Missing parents become nodes with only a title. It does not overwrite a `CLAUDE.md`. |
+| `nodes set <path> [--title] [--goal]` | Changes the title or the goal. Other fields, YAML comments, and the body stay. An empty goal removes the `## Goal` section. |
+| `nodes mv <from> <to>` | Moves or renames a node with its subtree. The new parent must be a node. |
+| `nodes rm <path>` | Moves a node with its subtree to `<root>/.trash/`. |
+| `nodes tree` | Prints the tree with the sessions of each node. |
+| `nodes check` | Finds parse errors, missing titles, frontmatter goals, and oversized organizational nodes. It exits with 1 on errors, not on warnings. |
+| `nodes launch <path> [--resume] [--host]` | Starts Claude in tmux for a node. `--resume` opens the last conversation of the node. `--host` starts it on a worker. |
+| `nodes dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. |
+| `nodes queue <path> ["<task>"]` | Adds a task to the queue of the node. Without a task, it prints the queue. |
+| `nodes end <tmux-name or session-id>` | Ends a session on the hub or on a worker. |
+| `nodes claim <path>` or `--auto "<text>" [--scope]` | Attaches the current Claude session to a node. The `/orca` skill runs it. |
+| `nodes adopt <session-id>` | Moves a session that runs outside tmux into tmux. |
+| `nodes worker add <host>`, `rm <host>`, `ls` | Manages workers. |
+| `nodes install-hooks [--remove]` | Installs the hook and the `/orca` skill. |
 
-The CLI and the server share one module for walking and parsing the tree.
+`mv` and `rm` refuse while a local session is live anywhere in the subtree.
+
+The CLI, the server, and the hook use one shared module in `src/core/` for the tree walk, parsing, edits, sessions, and path safety.
 
 ### 2. Server
 
-- A minimal HTTP server. Use Hono or `node:http`; no larger framework.
-- Binds to `127.0.0.1` only. It is exposed to the tailnet with `tailscale serve`, so no port is opened on the workstation's other interfaces. Document the exact `tailscale serve` command in the README.
-- Endpoints:
-  - `GET /api/tree` returns the whole tree as JSON: for each node, its path, title, goal, status, repo, branch, child count, descendant count, warnings, and children. Bodies are not included.
-  - `GET /api/node?path=<relative path>` returns one node's frontmatter, raw body, and rendered HTML body.
-- Every path parameter is resolved against the root and rejected if it escapes the root. This is the only security-sensitive code in the project; test it.
-- The tree is re-read from disk on each request. At the expected scale (tens to low hundreds of nodes) this is fast enough and avoids cache invalidation bugs.
-- Serves the static frontend.
-- Started under PM2 (or a systemd user unit) so it survives logout and reboot.
+- A minimal HTTP server on `node:http`. There is no framework.
+- It binds to `127.0.0.1` only. The default port is 4317. The environment variable `PORT` changes it.
+- It reads the tree from disk on each request. At tens to low hundreds of nodes, this is fast and has no cache faults.
+- It polls each worker in the background every 5 seconds. A slow or offline worker never delays a request.
+- PM2 (`pm2 start bin/orca-server.js --name orca`) keeps it running. After a server change, `pm2 restart orca` loads the new code.
+
+Endpoints:
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/tree` | The whole tree as JSON. For each node: path, title, goal, repos, branch, extra fields, issues, child count, descendant count, sessions, and children. No bodies. Worker sessions are on their nodes. |
+| `GET /api/node?path=<path>` | One node: fields, sessions, the raw body, the rendered HTML body, and the absolute path of its `CLAUDE.md`. |
+| `GET /api/workers` | Each worker with host, name, and the last poll error, if there is one. |
+| `POST /api/launch?path=&resume=&host=` | Starts a session. |
+| `POST /api/nodes/<op>` | `create`, `update`, `move`, `remove`, `end`, `adopt`, or `dispatch`. Each takes a JSON body. |
+| WebSocket `/api/term?session=&host=` | A terminal bridge. It runs `tmux attach` in a pty on the hub, or `ssh -t <host> tmux attach` for a worker. |
+
+Security rules:
+
+- Every path parameter goes through one function that resolves it against the root. The function rejects absolute paths, `..` escapes, and symlinks that leave the root. Tests cover it.
+- The write endpoints and the terminal accept only POST or WebSocket requests from the same origin as the page.
+- The terminal accepts only a live tmux session on the hub, or a session that the last worker poll reported.
+- tmux names and hosts that go to a remote shell must match `[A-Za-z0-9_.-]+`.
+- The worker scripts take arguments as JSON on stdin, so no prompt or context goes through a shell.
+
+CAUTION: Do not expose the server with `tailscale serve` on a shared tailnet. The server has no identity checks. Any person on the tailnet can then open a terminal as you.
 
 ### 3. Viewer
 
-A single-page frontend using D3 v7. No React; a build step is acceptable but not required.
+A single-page frontend with D3 v7 and xterm.js. It has no framework and no build step.
 
-**Layout.** Nested circles using `d3.pack`. Each node's circle contains its children's circles. Circle size is based on descendant count (a leaf weighs 1), so bigger subtrees take more room.
+**Layout.** A force-directed graph from `d3.forceSimulation`. Links go from each parent to its children. A radial force puts each depth below the root on its own ring, 165px apart. As a result, each branch takes its own sector and does not interleave with other branches. Repulsion and a collision margin around each circle and its title keep nodes apart. The canvas pans and zooms. Node positions stay the same through each poll, and the layout moves only when the set of visible nodes changes.
 
-**Attention protection is the main design constraint.** At any moment the viewer has one **focus** node. It renders:
+**Root.** The graph has one **root** node at a time. Any node with children can be the root. The root is pinned at the center of the free space.
 
-- the focus node as the outer circle,
-- its immediate children as labeled circles inside it,
-- nothing deeper. Grandchildren are not drawn. A child that has children of its own shows a small count badge instead.
+**Node kinds.** The root is a filled disc with an outer ring. A parent is a ring with an inner ring. A leaf is one plain ring. The size of a node comes from the number of its direct children.
 
-The user never sees deep detail unless they step into it.
+**Packed and unpacked nodes.** The graph shows the root, and the children of every unpacked node. A packed parent is filled, hides its subtree, and shows `+N` for its child count. An unpacked parent is a smaller, hollow hub with a `–` mark. When a node is packed, all nodes inside it are packed too. The browser keeps the set of unpacked nodes in local storage.
+
+**Attention protection.** The graph shows only the nodes that the person unpacked. Packed nodes still show the state of what they hide.
+
+**State on the map.** A packed node shows the most urgent session state in its subtree. An unpacked node shows only the state of its own sessions, because its children show theirs. Thus a finished result three levels down shows on the packed node that contains it:
+
+| State | Meaning | Mark |
+|---|---|---|
+| needs you | A session waits for a permission or an answer. | Red outline and label. Red is used for nothing else. |
+| new result | A session finished a turn that the person has not opened. | Heavy solid outline. |
+| working | A session runs. | Solid outline. |
+| seen | Sessions are live, and the person saw their results. | Thin solid outline. |
+| idle | No live sessions. | Dashed outline. |
+
+Each state also has a text label on the rim, so the map does not rely on color alone. Each session is a dot on the rim of its own node. A working dot moves slowly around the rim.
+
+A result stays new until the person opens the terminal of that session. The browser keeps the "seen" record in local storage.
+
+**Sessions rail.** A column on the left lists every session under the root, in this order: needs you, new result, working, seen. Each row shows the node, the summary, the worker name, the path, and the age. A click on a row goes to the node and opens its terminal. The tab title shows the count of sessions that need the person or have new results.
 
 **Navigation.**
 
-- Clicking a child zooms into it with an animated transition, making it the new focus. Transitions should be smooth (about 500ms) so the user keeps a sense of place.
-- Clicking the background, pressing Escape, or clicking a breadcrumb zooms back out.
-- A breadcrumb trail at the top shows the path from root to focus.
-- The URL hash holds the focused path (for example `#/work/vmt-analyzer`), so views can be bookmarked and the back button works.
+- A click on a node with children unpacks it, or packs it again. Its children grow out of it on an arc that faces away from its parent. When a node is packed, its children shrink back into it.
+- A drag on the background pans the canvas, and the canvas continues at the release speed, then slows. Trackpad scroll pans. A pinch or a mouse wheel zooms with easing.
+- A click on a leaf, or on the root, opens its panel.
+- A drag on a node moves it.
+- The view fits all visible nodes after the first layout, after each root change, and when the person presses `f`.
+- A click on the background, or the Escape key, closes the panel.
+- **Set as root**, in the panel of a node with children, makes that node the root.
+- The breadcrumb shows the path from the top of the tree to the root. A click on a step makes that step the root.
+- The URL hash holds the root path, so bookmarks and the back button work. The browser remembers the last root, and the bare URL opens it.
 
-**Detail panel.** Selecting a node (single click on a leaf, or a dedicated info control on a container) opens a side panel showing title, goal, status, repo, branch, warnings, and the rendered Markdown body. The panel is read-only. The absolute path to the node's `CLAUDE.md` is shown with a copy button, so the user can open it over SSH.
+**Detail panel.** A click on a leaf, or on the `i` mark of a container, opens the panel. The panel shows the title, goal, fields, issues, sessions, and the rendered body. It has a copy button for the path of the `CLAUDE.md`. Its controls:
 
-**Status display.** Each status has a distinct fill: `active` is prominent, `waiting` is the most attention-grabbing, `idle` neutral, `done` muted, `dormant` faded. Never rely on color alone; show the status as a text label or icon as well.
+- Edit, Add child, Move, and Delete do the same as `nodes set`, `new`, `mv`, and `rm`. Delete moves the node to `.trash`.
+- Launch and Resume start a session. A picker selects the hub or a worker.
+- Terminal, End, and Move into orca act on each session.
+- End needs a second click when the session is working or needs the person.
 
-**Refresh.** The viewer polls `/api/tree` every 5 seconds and updates in place without losing the current focus or panel. Polling is chosen over file watching for simplicity; it can be replaced later.
+**Header controls.** Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form.
 
-**Theming and layout.** Supports light and dark mode via `prefers-color-scheme`. Usable on a laptop screen; mobile is not a goal.
+**Terminal mode.** When a terminal opens, it fills the space to the right of the rail. The map, the legend, and the panel step aside. A click on another rail row changes the terminal.
+
+| Key | Action |
+|---|---|
+| Esc | Back to the map, at the node of the session, with its panel open. |
+| Shift+Esc | Sends Escape to Claude, for example to stop a turn. |
+| ⌘. | Toggles between the map and the last terminal. |
+
+**Refresh.** The viewer polls `/api/tree` every 5 seconds. It updates in place and keeps the root, the unpacked nodes, the panel, and the open terminal.
+
+**Theme.** Ink on paper in light mode, chalk on slate in dark mode, through `prefers-color-scheme`. Titles use Brygada 1918 and metadata uses Azeret Mono, from Google Fonts. There are no italics. The viewer is for laptop screens.
+
+### 4. Dispatch
+
+Dispatch turns a prompt into a placed node and a running session, with no naming step.
+
+1. The person types a prompt on the root node.
+2. One `claude -p` call with Haiku gets the subtree outline and the prompt. It returns a path, a title, and a goal. The call has no tools and no user settings, so no hooks run.
+3. If the path is an existing node, orca uses it. If not, orca creates the node and writes the prompt into its Context.
+4. Orca starts Claude on the node with the prompt, and the terminal opens.
+
+The placement stays inside the subtree of the root. A placement takes about 8 seconds and costs about 2 cents.
+
+### 5. Workers
+
+A worker runs sessions that the hub shows, streams, and controls. The orca server never listens outside `127.0.0.1`, because the hub pulls everything over SSH.
+
+- `nodes worker add <host>` copies the plain JavaScript files in `src/remote/` to `~/.orca/bin` on the worker. It installs the worker hook in the `~/.claude/settings.json` of the worker and records the worker name.
+- The worker hook records every Claude session on the worker in `~/.orca/sessions/`.
+- The hub runs `list.mjs` on the worker over one persistent SSH connection. The script returns the live sessions and removes dead ones.
+- A worker session goes to the node that orca launched it for. If orca did not launch it, it goes to the node with a matching `<worker>:<path>` repo. Other worker sessions do not show.
+- A session that the hub starts on a worker runs in the worker repo of the node, or in `~/orca/<node-path>`. The worker has no node files, so orca passes the `CLAUDE.md` chain with `--append-system-prompt`.
+- The hub hook and the worker hook share one plain JavaScript module, `src/remote/state.mjs`, for the state logic.
+
+Do these steps once for each worker:
+
+1. Run `nodes worker add <host>` on the hub.
+2. On the worker, run `cd ~/orca && claude`.
+3. Trust the folder. Then new node folders under `~/orca` do not stop at the trust prompt.
 
 ## Seed tree
 
-`nodes init` creates this example so the viewer has something to show. The user will replace it with real nodes.
+`nodes init` creates this example. The person replaces it with real nodes.
 
 ```
 ~/nodes/
@@ -146,7 +324,7 @@ The user never sees deep detail unless they step into it.
   work/
     CLAUDE.md               organizational, no goal
     vmt-analyzer/
-      CLAUDE.md             project node with a goal
+      CLAUDE.md             project node with a goal and a repo
   personal/
     CLAUDE.md               organizational, no goal
     meloria/
@@ -154,52 +332,100 @@ The user never sees deep detail unless they step into it.
     side-projects/
       CLAUDE.md             organizational
       example-project/
-        CLAUDE.md           leaf with a goal and status
+        CLAUDE.md           leaf with a goal
   home/
     CLAUDE.md               organizational
     household/
       CLAUDE.md             leaf
 ```
 
-Seed files contain placeholder text in each section, clearly marked as placeholder.
+The seed files mark their text as `(placeholder)`.
 
-## Non-goals for Phase 1
+To make dispatched sessions start without a prompt, trust the root once: run `cd ~/nodes && claude`, then trust the folder. Trust of the root covers every folder below it.
 
-- Launching, monitoring, or managing Claude Code sessions.
-- Editing nodes from the viewer. All writes go through the filesystem or the CLI, so there is one write path and no conflict with agents writing the same files later.
-- Goal roll-ups or progress aggregation.
-- A database, accounts, sharing, or multi-user support.
-- Notifications.
+### 6. Queues
 
-## Acceptance criteria
+A queue lets a node hand a list of tasks to background workers. The manager is a loop in the server that runs every 5 seconds. It is not a Claude session.
+
+The `## Queue` section of a node holds the tasks:
+
+```markdown
+## Queue
+- [ ] waiting
+- [>] running → work/orca/fix-x
+- [x] done → work/orca/dark-mode
+  Result: the Status line of the worker
+- [!] failed → work/orca/rename — the reason
+```
+
+1. The manager takes the next waiting task when fewer than 2 tasks of that node are running.
+2. One Haiku call returns a folder name, a title, a model (`haiku` or `sonnet`), and the context that the worker needs.
+3. The manager creates a child node with `background: true`. The task becomes its goal.
+4. If the node has a local git repo, the manager adds a worktree on the branch `orca/<child path>`, in `<child>/.node/worktree`.
+5. Claude starts in the worktree with the chosen model, `--permission-mode acceptEdits`, and read access to the whole tree. Edits outside the worktree and shell commands still stop for approval, and the session then shows on the rail.
+6. When the worker finishes its turn, the manager commits the worktree and merges the branch into the current branch of the main checkout with `--no-ff`.
+7. If the merge succeeds, the manager removes the worktree and the branch, ends the session, and checks the task off with the Status line of the worker.
+
+The worker does not commit and does not run git. The manager does all git work.
+
+If the merge conflicts, the manager aborts it and merges the main branch into the worktree. It sends the worker one prompt to remove the conflict markers. When the worker stops again, the manager commits and merges again. A second conflict fails the task. A merge that git refuses, for example because of uncommitted changes in the main checkout, also fails the task. Git does not overwrite those changes.
+
+A failed task keeps its worktree and its session, so the person can examine them. A worker session that ends before it finishes also fails the task.
+
+The manager keeps the conflict retries in memory. A restart of the server sets a task that was mid-plan back to waiting.
+
+## Not built
+
+- Identity checks on the server.
+- `/orca` claims on a worker. A worker has no `nodes` CLI.
+- Context for sessions that the person starts by hand on a worker.
+- `mv` and `rm` do not see worker sessions, so they do not block a node that has one.
+- Goal roll-ups or progress totals.
+- Locks between viewer edits and agent writes to the same `CLAUDE.md`.
+- Notifications outside the browser tab.
+- Mobile layout.
+- A queue on a worker. Queue workers run only on the hub.
+- A worker that asks a question at the end of its turn counts as finished, and the manager merges what it has.
+
+## Verified behavior
+
+The test suite (`npm test`) and manual tests cover these items:
 
 1. `nodes init` creates the seed tree, and `nodes check` passes on it.
-2. `nodes new work/vmt-analyzer/data-pipeline --goal "..."` creates a valid node that appears in the viewer within one poll cycle, without a page reload.
-3. Hand-editing a node's frontmatter (for example setting `status: waiting`) is reflected in the viewer within one poll cycle.
-4. At the root view, only the top-level nodes and their badges are visible. No grandchildren are drawn at any focus level.
-5. Zooming in and out is animated, the breadcrumb is always correct, and the browser back button returns to the previous focus.
-6. A request for `/api/node?path=../../etc/passwd` (and similar escapes) is rejected.
-7. Launching `claude` inside `~/nodes/personal/side-projects/example-project` loads that node's `CLAUDE.md` and its ancestors' (verify with `/memory` or `/context` inside Claude Code). This confirms the inheritance assumption the whole design rests on.
-8. The server survives a workstation reboot and is reachable over the tailnet via `tailscale serve`.
+2. A new node from `nodes new` or from the viewer shows in the viewer within one poll, without a page reload.
+3. A hand edit of a node file shows in the viewer within one poll.
+4. The viewer draws only the root and the children of unpacked nodes.
+5. The root, the unpacked nodes, and the breadcrumb survive a reload. The back button returns to the last root.
+6. `/api/node?path=../../etc/passwd` and similar escapes get a 400 response. Write and terminal requests from other origins are refused.
+7. A session in `~/nodes/personal/side-projects/example-project` loads the `CLAUDE.md` files of that node and of its ancestors.
+8. A session outside the tree that matches a `repo` path, or that runs `/orca`, shows on its node with its state and summary.
+9. A dispatched prompt creates a node in the right subtree and starts a session on it.
+10. A session moved into orca keeps its conversation.
+11. A session that the hub launches on a worker shows on its node. Its terminal streams to the hub, and End stops it.
+12. Queued tasks run 2 at a time and merge into the main checkout. A forced conflict goes back to the worker once, and then merges with no permission prompt.
 
-## Suggested repo layout
+## Repo layout
 
 ```
-node-tree/
+orca/
+  bin/          entry points: nodes, orca-server, orca-hook
   src/
-    core/        tree walking, frontmatter parsing, validation, path safety
-    cli/         nodes command
-    server/      HTTP server and API
-  web/           viewer (HTML, CSS, D3 code)
-  templates/     node template, root conventions file, seed tree
+    core/       tree walk, parsing, edits, sessions, claims, dispatch, queues, workers, path safety
+    cli/        the nodes command
+    hook/       the hub hook
+    server/     HTTP server, API, and terminal bridge
+    remote/     plain JavaScript for workers, and the state logic shared with the hub hook
+  web/          viewer: HTML, CSS, D3, and xterm code
+  templates/    node template, seed tree, and the /orca skill
   test/
-  README.md      setup, tailscale serve command, PM2 setup
+  README.md     setup, CLI, workers, and viewer
+  design.md     this file
 ```
 
-## Future phases (context only, do not build)
+## Future work
 
-These explain why Phase 1 is shaped the way it is.
+These items explain the shape of the current design.
 
-**Phase 2: sessions.** A "launch here" control on a node starts a tmux session running Claude Code in that node's directory, with the node's `repo` added via `--add-dir`. The tmux session is named after the node path. Clicking a node with a live session jumps to it. Claude Code hooks (`Stop` when a response finishes, `Notification` when it is waiting on the user) write session state and a one-sentence status summary into the node's `.node/` directory. The viewer then shows which nodes are working and which are done and waiting, so the user stops polling terminals by hand. The one-sentence summary is the first attack on the main pain point: long phase reports that take minutes to digest when one sentence and a decision would do.
+**Orchestration.** A project session gets a goal from the person, then creates its own child nodes and sessions. It is the point of contact for its subtree. Child sessions report through their parent, not directly to the person. The person can promote any child node to talk to them directly. Agents run only when there is concrete work, and they write back to the node before they exit, so idle nodes cost no tokens.
 
-**Phase 3: orchestration.** A project node's session receives a goal from the user and creates its own child nodes and sessions, acting as the point of contact for its subtree. Subnodes report up through their parent rather than interrupting the user directly. The user can promote any subnode to talk to them directly when they want to work at that level of detail. "Bringing a node online" grants it permission to interrupt; offline nodes queue their results. Agents run only when there is concrete work, and write back to the node before exiting, so idle nodes cost no tokens.
+**Attention controls.** "Bringing a node online" lets it interrupt the person. Offline nodes queue their results until the person looks.

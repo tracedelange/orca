@@ -109,18 +109,20 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 #crumbs a { color: var(--ink-2); text-decoration: none; }
 #crumbs a:hover { color: var(--ink); }
 #crumbs span.here { color: var(--ink); }
-#crumbs .locked { border: 1px solid var(--ink-2); padding: 4px 7px; }
 #crumbs .sep { margin: 0 8px; }
 
 #map { position: fixed; inset: 0; width: 100%; height: 100%; }
 
-/* Nodes */
+/* Graph */
+#map { cursor: grab; }
+#map:active { cursor: grabbing; }
+.links line { stroke: var(--ink-3); stroke-width: 1; }
+
 .rim {
   fill: var(--paper);
   stroke: var(--ink-2);
   stroke-width: 1;
   stroke-dasharray: 3 4;
-  pointer-events: all;
   cursor: pointer;
 }
 /* State, most urgent first. Idle is the dashed default above. */
@@ -133,45 +135,65 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
   stroke-dasharray: none;
   fill: color-mix(in srgb, var(--accent) 8%, var(--paper));
 }
+/* A ring ripples out from a node with a running session: slow ink while working, quick accent when it needs you. */
+.pulse { fill: none; stroke: none; pointer-events: none; transform-box: fill-box; transform-origin: center; }
+.a-working .pulse { stroke: var(--ink-2); stroke-width: 1.5; animation: pulse 2.4s ease-out infinite; }
+.a-needs .pulse { stroke: var(--accent); stroke-width: 2.5; animation: pulse 1.2s ease-out infinite; }
+@keyframes pulse { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.9); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .a-working .pulse, .a-needs .pulse { animation: none; transform: scale(1.35); opacity: 0.35; }
+}
+/* Node kinds. Root: a filled disc with an outer ring. Parent: a ring with an inner ring
+   ("contains"), filled when packed and hollow when unpacked. Leaf: one plain ring. */
+.halo, .inner { fill: none; pointer-events: none; }
+.node.is-root .rim { stroke: var(--ink); stroke-width: 2; stroke-dasharray: none; fill: var(--ink); }
+.node.is-root .halo { stroke: var(--ink-3); stroke-width: 1; }
+.node.packed .rim { fill: var(--paper-2); }
+.node.open .rim { fill: var(--paper); }
+.inner { stroke: var(--ink-3); stroke-width: 1; }
+.node.packed .inner { stroke: var(--ink-2); }
 .node:hover .rim { stroke-width: 2.5; }
-.node.selected .rim { stroke-width: 3; }
-.leaving { pointer-events: none; }
+.node.selected .rim { stroke-width: 3.5; }
 
-
-.arc { fill: none; }
-.label {
-  font: 500 9px var(--mono);
-  letter-spacing: 0.2em;
+.node text { pointer-events: none; text-anchor: middle; }
+.node .title {
+  font: 600 13px var(--serif);
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.node.is-root .title { font-size: 17px; }
+.node.packed .title { font-size: 14px; }
+.node .label {
+  font: 500 8.5px var(--mono);
+  letter-spacing: 0.18em;
   fill: var(--ink-2);
-  text-anchor: middle;
-  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
 }
 .a-needs .label { fill: var(--accent); }
 .a-new .label { fill: var(--ink); }
+.node .count { font: 500 11px var(--mono); fill: var(--ink-2); }
+.node.packed .count { fill: var(--ink); }
 
-.title {
-  font-family: var(--serif);
-  font-weight: 600;
-  fill: var(--ink);
-  text-anchor: middle;
-  pointer-events: none;
-}
-
-.badge circle, .info circle { fill: var(--paper); stroke: var(--ink-2); }
-.badge text { font: 500 10px var(--mono); fill: var(--ink); text-anchor: middle; pointer-events: none; }
-.badge { pointer-events: none; }
 .info { cursor: pointer; }
-.info text { font: 600 11px var(--serif); fill: var(--ink-2); text-anchor: middle; pointer-events: none; }
+.info circle { fill: var(--paper); stroke: var(--ink-2); }
+.info text { font: 600 10px var(--serif); fill: var(--ink-2); }
 .info:hover circle { stroke: var(--ink); }
 
-/* Focus ring */
-.ring-line { fill: none; stroke: var(--ink); stroke-width: 1; opacity: 0.6; }
-.ticks line { stroke: var(--ink-3); stroke-width: 1; }
-.ticks line.major { stroke: var(--ink-2); }
-.ring-label { font: 500 10px var(--mono); letter-spacing: 0.24em; fill: var(--ink-2); text-anchor: middle; }
-.ring.a-needs .ring-label { fill: var(--accent); }
-.ring.a-new .ring-label { fill: var(--ink); }
-.empty { font: 10px var(--mono); letter-spacing: 0.2em; fill: var(--ink-3); text-anchor: middle; }
+#hint {
+  position: fixed;
+  right: 24px;
+  bottom: 16px;
+  margin: 0;
+  font: 10px var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+.mode-term #hint { display: none; }
 
 /* Sessions: dots on the rim. A working dot drifts around it. */
 .dot circle { pointer-events: none; }
@@ -179,7 +201,7 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 .dot.ready circle { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
 .dot.needs circle { fill: var(--accent); }
 .dot.new circle { fill: var(--ink); stroke: var(--paper); stroke-width: 1.5; }
-.dot.working .spin { animation: orbit 40s linear infinite; }
+.dot.working .spin { animation: orbit 3s linear infinite; }
 @keyframes orbit { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .dot.working .spin { animation: none; } }
 
@@ -196,6 +218,9 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
   padding: 0 12px 0 24px;
 }
 #rail[hidden] { display: none; }
+/* On the map the rail floats over nodes, so it gets the same solid card as the usage line. */
+/* It ends 20px above the legend (160px tall, 20px from the bottom). */
+body:not(.mode-term) #rail { bottom: 200px; background: var(--paper-2); border: 1px solid var(--ink-3); border-left: none; }
 #rail .rail-head {
   font: 500 10px var(--mono);
   letter-spacing: 0.2em;
@@ -255,9 +280,9 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail .meta { font: 10px var(--mono); color: var(--ink-3); padding-left: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Legend */
-#legend { position: fixed; left: 24px; bottom: 20px; overflow: visible; }
+#legend { position: fixed; left: 24px; bottom: 20px; overflow: visible; pointer-events: none; }
 #legend .rim { cursor: default; }
-#legend text { font: 10px var(--mono); letter-spacing: 0.1em; fill: var(--ink-2); }
+#legend text { font: 10px var(--mono); letter-spacing: 0.1em; fill: var(--ink-2); text-anchor: start; }
 
 /* Detail panel */
 #panel {

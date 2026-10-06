@@ -22,18 +22,23 @@ Pick where the task belongs, inside the given scope.
 - Otherwise return a new node: one new lowercase kebab-case folder, 1 to 4 words, under the existing node it fits best.
 - title: 2 to 5 words. goal: one sentence saying what done looks like.`;
 
-// Asks Haiku where a prompt belongs under `scope`. No tools, no user settings (so no hooks), no saved session.
+// Asks Haiku where a prompt belongs under `scope`.
 export async function place(root: string, scope: string, prompt: string): Promise<Placement> {
   const nodes = flatten(readTree(root)).filter((n) => within(n.path, scope));
   const outline = nodes.map((n) => `${n.path || "/"} | ${n.title}${n.goal ? ` | ${n.goal}` : ""}`).join("\n");
   const ask = `Scope: ${scope || "/"}\n\nExisting nodes (path | title | goal):\n${outline}\n\nTask:\n${prompt}`;
 
+  return askHaiku(SYSTEM, SCHEMA, ask);
+}
+
+// One Haiku call that must answer in `schema`. No tools, no user settings (so no hooks), no saved session.
+export async function askHaiku(system: string, schema: object, prompt: string) {
   const { stdout } = await promisify(execFile)("claude", [
-    "-p", ask, "--model", "haiku", "--system-prompt", SYSTEM, "--json-schema", JSON.stringify(SCHEMA),
+    "-p", prompt, "--model", "haiku", "--system-prompt", system, "--json-schema", JSON.stringify(schema),
     "--output-format", "json", "--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence",
   ], { cwd: os.tmpdir(), timeout: 60_000 });
   const out = JSON.parse(stdout);
-  if (out.is_error || !out.structured_output) throw new EditError(`placement failed: ${out.result ?? "no answer"}`);
+  if (out.is_error || !out.structured_output) throw new EditError(`Haiku call failed: ${out.result ?? "no answer"}`);
   return out.structured_output;
 }
 

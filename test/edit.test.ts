@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { createNode, EditError, moveNode, removeNode, updateNode } from "../src/core/edit.ts";
 import { PathError } from "../src/core/paths.ts";
+import { addToQueue, queueItems } from "../src/core/queue.ts";
 import { flatten, readNodeDetail, readTree } from "../src/core/tree.ts";
 
 function seededRoot(): string {
@@ -72,4 +73,16 @@ test("endSession closes the tmux session and drops the session file", async () =
   assert.throws(() => execFileSync("tmux", ["has-session", "-t", `=${name}`], { stdio: "pipe" }));
   assert.ok(!fs.existsSync(path.join(dir, "t1.json")));
   assert.throws(() => endSession(root, "t1"), EditError);
+});
+
+test("queue tasks go in a ## Queue section before ## Log, in order", () => {
+  const root = seededRoot();
+  addToQueue(root, "work", "Fix the  login\n bug");
+  addToQueue(root, "work", "Add dark mode");
+  const text = fs.readFileSync(path.join(root, "work", "CLAUDE.md"), "utf8");
+  assert.deepEqual(queueItems(text).map((i) => [i.mark, i.text]), [[" ", "Fix the login bug"], [" ", "Add dark mode"]]);
+  assert.ok(text.indexOf("## Queue") < text.indexOf("## Log") || !text.includes("## Log"));
+  assert.throws(() => addToQueue(root, "work", "  "), EditError);
+  assert.deepEqual(queueItems("## Queue\n- [x] Done → work/done\n  Result: ok\n- [!] Broke → work/b — merge conflict\n## Log\n- [ ] not queue"),
+    [{ mark: "x", text: "Done", child: "work/done" }, { mark: "!", text: "Broke", child: "work/b" }]);
 });

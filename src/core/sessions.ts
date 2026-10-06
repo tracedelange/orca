@@ -98,21 +98,30 @@ export type LaunchOptions = {
   resume?: boolean;  // reopen the node's last conversation
   resumeId?: string; // reopen this conversation; needs the folder it ran in as cwd
   cwd?: string;      // defaults to the node folder
+  model?: string;
+  permissionMode?: string;
+  allowedTools?: string[];
 };
+
+// tmux names follow the node path; tmux forbids "." and ":" in names.
+export const tmuxBase = (root: string, dir: string) => "orca-" + (path.relative(root, dir) || "root").replace(/[^A-Za-z0-9_-]/g, "-");
 
 export function launch(root: string, rel: string, opts: LaunchOptions = {}): string {
   const dir = resolveInRoot(root, rel);
   if (!hooksInstalled()) throw new Error('orca hooks are not installed; run "nodes install-hooks"');
   const node = parseNode(fs.readFileSync(path.join(dir, "CLAUDE.md"), "utf8"), path.basename(dir));
 
-  // Named after the node path; tmux forbids "." and ":" in names.
-  const base = "orca-" + (path.relative(root, dir) || "root").replace(/[^A-Za-z0-9_-]/g, "-");
+  const base = tmuxBase(root, dir);
   const live = liveTmuxSessions();
   let name = base;
   for (let i = 2; live.has(name); i++) name = `${base}-${i}`;
 
   const claude = ["claude", "-n", node.title];
   for (const repo of node.repos) if (!splitRepo(repo).host) claude.push("--add-dir", expandHome(repo));
+  if (opts.cwd) claude.push("--add-dir", dir); // so a session running elsewhere can still edit its node
+  if (opts.model) claude.push("--model", opts.model);
+  if (opts.permissionMode) claude.push("--permission-mode", opts.permissionMode);
+  for (const tool of opts.allowedTools ?? []) claude.push("--allowedTools", tool);
   if (opts.resumeId) claude.push("--resume", opts.resumeId);
   else if (opts.resume) claude.push("--continue");
   if (opts.prompt) claude.push("--", opts.prompt);
