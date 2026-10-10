@@ -31,7 +31,8 @@ const termview = document.getElementById("termview");
 let panelNode = null; // last node rendered in the panel
 let editing = false;  // a form is open in the panel; polling must not redraw it
 const rail = document.getElementById("rail");
-let seen = readSeen(); // sessionId -> finishedAt of the last result you looked at
+let seen = {}; // sessionId -> finishedAt of the last result you looked at; the server keeps it for every device
+let seenText = "";
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
 const archivedButton = document.getElementById("archived");
@@ -41,9 +42,16 @@ archivedButton.classList.toggle("on", showArchived);
 
 async function load() {
   fetch("/api/workers").then((r) => r.json()).then((w) => (workerList = w)).catch(() => {});
-  const res = await fetch("/api/tree");
+  const [res, seenRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen")]);
   const text = await res.text();
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
+  const nextSeen = await seenRes.text();
+  if (nextSeen !== seenText) {
+    seenText = nextSeen;
+    seen = JSON.parse(nextSeen);
+    panelText = ""; // another device may have marked a session in the open panel
+    if (tree) render();
+  }
   if (text !== treeText) {
     treeText = text;
     tree = d3.hierarchy(JSON.parse(text), shownChildren).sort((a, b) => a.data.path.localeCompare(b.data.path));
@@ -52,7 +60,6 @@ async function load() {
     render();
   }
   if (term) markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
-  pruneSeen();
   revealActive();
   renderRail();
   if (selected !== null) refreshPanel();
@@ -81,28 +88,17 @@ async function setArchived(path, archived) {
 
 // ---- Session state ----
 
-function readSeen() {
-  try { return JSON.parse(localStorage.getItem("orca.seen")) ?? {}; } catch { return {}; }
-}
-function writeSeen() {
-  try { localStorage.setItem("orca.seen", JSON.stringify(seen)); } catch {}
-}
 function markSeen(sessions) {
   const fresh = sessions.filter(isNew);
   if (!fresh.length) return;
-  for (const s of fresh) seen[s.sessionId] = s.finishedAt;
-  writeSeen();
+  const marks = Object.fromEntries(fresh.map((s) => [s.sessionId, s.finishedAt]));
+  Object.assign(seen, marks);
+  post("seen", { seen: marks }).catch(() => {});
   renderRail();
   render();
-  // The panel only redraws when server data changes, and "seen" is local, so force it.
+  // The panel only redraws when server data changes, and "seen" is not part of it, so force it.
   panelText = "";
   if (selected !== null) refreshPanel();
-}
-function pruneSeen() {
-  const live = new Set(sessionsIn(tree).map((s) => s.sessionId));
-  const before = Object.keys(seen).length;
-  seen = Object.fromEntries(Object.entries(seen).filter(([id]) => live.has(id)));
-  if (Object.keys(seen).length !== before) writeSeen();
 }
 
 // A finished turn you have not opened since it finished.
@@ -243,7 +239,7 @@ const zoom = d3.zoom()
   .scaleExtent([0.2, 3])
   .filter((e) => e.type !== "wheel" && e.type !== "dblclick" && !e.button)
   .on("start", (e) => {
-    if (e.sourceEvent) stopGlide();
+    if (e.sourceEvent) stopGlide(), stopZoomer();
     samples = [];
   })
   .on("zoom", (e) => {
@@ -262,6 +258,10 @@ let anchor = [0, 0];
 function stopGlide() {
   glider?.stop();
   glider = null;
+}
+function stopZoomer() {
+  zoomer?.stop();
+  zoomer = null;
 }
 
 // After a drag, keep moving at the release speed and slow down smoothly.
@@ -285,26 +285,27 @@ function glide() {
   });
 }
 
-// Pinch (ctrlKey) and mouse wheels zoom; trackpad scrolling pans, with the system's own momentum.
+// Vertical scroll and pinch zoom; sideways scroll pans. Drag the background to pan freely.
 svg.node().addEventListener("wheel", (e) => {
   e.preventDefault();
   stopGlide();
-  const mouseWheel = e.deltaMode !== 0 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 50);
-  if (!e.ctrlKey && !mouseWheel) {
-    const k = d3.zoomTransform(svg.node()).k;
-    return svg.call(zoom.translateBy, -e.deltaX / k, -e.deltaY / k);
-  }
-  if (!zoomer) targetK = d3.zoomTransform(svg.node()).k;
-  targetK = Math.max(0.2, Math.min(3, targetK * Math.pow(2, -e.deltaY * (e.ctrlKey ? 0.012 : 0.0025))));
+  svg.interrupt(); // a running fit or pan animation would fight the zoom
+  const k = d3.zoomTransform(svg.node()).k;
+  if (!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return svg.call(zoom.translateBy, -e.deltaX / k, 0);
   anchor = d3.pointer(e, svg.node());
+  // A pinch arrives as many small, smooth steps, so it applies directly.
+  if (e.ctrlKey) {
+    stopZoomer();
+    return svg.call(zoom.scaleTo, k * Math.pow(2, -e.deltaY * 0.012), anchor);
+  }
+  // Scrolling, especially a mouse wheel, comes in coarse steps, so it eases toward a target.
+  if (!zoomer) targetK = k;
+  targetK = Math.max(0.2, Math.min(3, targetK * Math.pow(2, -e.deltaY * 0.0025)));
   zoomer ??= d3.timer(() => {
-    const k = d3.zoomTransform(svg.node()).k;
-    const next = k + (targetK - k) * 0.22;
+    const now = d3.zoomTransform(svg.node()).k;
+    const next = now + (targetK - now) * 0.22;
     svg.call(zoom.scaleTo, next, anchor);
-    if (Math.abs(targetK - next) < 0.001) {
-      zoomer.stop();
-      zoomer = null;
-    }
+    if (Math.abs(targetK - next) < 0.001) stopZoomer();
   });
 }, { passive: false });
 
@@ -530,15 +531,24 @@ function renderRail() {
 
   const wasHidden = rail.hidden;
   rail.hidden = !sessions.length;
-  rail.querySelector("ol").innerHTML = sessions.map((s) => {
-    const st = sessionState(s);
-    return `<li><button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
-      <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${STATE_LABEL[st]}</span></span>
-      ${s.summary ? `<span class="sum">${esc(s.summary)}</span>` : ""}
-      <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
-    </button></li>`;
-  }).join("");
+  // Working sessions get their own section at the top; the rest stay most urgent first.
+  const groups = { working: [], rest: [] };
+  for (const s of sessions) groups[sessionState(s) === "working" ? "working" : "rest"].push(s);
+  for (const [name, list] of Object.entries(groups)) {
+    const section = rail.querySelector(`[data-group="${name}"]`);
+    section.hidden = !list.length;
+    section.querySelector("ol").innerHTML = list.map(railRow).join("");
+  }
   if (wasHidden !== rail.hidden) relayout(300);
+}
+
+function railRow(s) {
+  const st = sessionState(s);
+  return `<li><button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
+    <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${STATE_LABEL[st]}</span></span>
+    ${s.summary ? `<span class="sum">${esc(s.summary)}</span>` : ""}
+    <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
+  </button></li>`;
 }
 
 rail.addEventListener("click", async (e) => {
@@ -578,10 +588,18 @@ async function select(p) {
   gNodes.selectAll("g.node").classed("selected", (n) => n.path === selected);
   panelText = "";
   await refreshPanel();
-  if (panel.hidden) {
-    panel.hidden = false;
-    relayout(300);
-  }
+  panel.hidden = false;
+  center = measure(); // the panel overlays the map; it does not shift it
+  keepClear(p);
+}
+
+// Pans just far enough that the node at `p` and its title are not under the panel.
+function keepClear(p) {
+  const n = sim.nodes().find((x) => x.path === p);
+  if (!n) return;
+  const t = d3.zoomTransform(svg.node());
+  const overlap = t.applyX(n.x) + space(n) * t.k + 24 - (innerWidth - panel.offsetWidth);
+  if (overlap > 0) svg.transition().duration(300).ease(EASE).call(zoom.translateBy, -overlap / t.k, 0);
 }
 
 function closePanel() {
@@ -589,7 +607,7 @@ function closePanel() {
   selected = null;
   panel.hidden = true;
   gNodes.selectAll("g.node").classed("selected", false);
-  relayout(300);
+  center = measure();
 }
 
 async function refreshPanel() {
@@ -743,9 +761,6 @@ const FORMS = {
     ${field("New path", `<input name="to" value="${esc(n.path)}" required>`)}
     <p class="hint">Change the last part to rename. Change the rest to move it under another node.</p>
     <div class="row"><button type="submit">Move</button><button class="cancel" type="button">Cancel</button></div>`,
-  dispatch: (n) => `
-    ${field(`What needs doing under ${esc(n.title)}?`, `<textarea name="prompt" rows="6" required placeholder="Plain instructions. Orca files it into the tree and starts Claude on it."></textarea>`)}
-    <div class="row"><button type="submit">Dispatch</button><button class="cancel" type="button">Cancel</button>${whereSelect()}<span class="hint">⌘↵</span></div>`,
   queue: (n) => `
     ${field(`Tasks for ${esc(n.title)}, one per line`, `<textarea name="tasks" rows="6" required placeholder="Each line becomes a background worker. Orca merges its work and checks it off in the ## Queue section."></textarea>`)}
     <div class="row"><button type="submit">Queue</button><button class="cancel" type="button">Cancel</button><span class="hint">⌘↵</span></div>`,
@@ -783,7 +798,6 @@ async function submitForm(form) {
   const n = panelNode;
   const v = Object.fromEntries(new FormData(form));
   const kind = form.dataset.kind;
-  if (kind === "dispatch") return submitDispatch(form, n, v.prompt, v.host);
   try {
     if (kind === "edit") {
       await post("update", { path: n.path, ...v });
@@ -817,25 +831,43 @@ async function submitForm(form) {
 }
 
 // Placement takes a few seconds (a Haiku call), so the form shows progress, then the terminal opens.
-async function submitDispatch(form, n, prompt, host) {
-  const button = form.querySelector("button[type=submit]");
+// ---- Dispatch: one dialog over everything; Haiku picks the node from the whole tree ----
+
+const dispatcher = document.getElementById("dispatcher");
+const dispatchForm = dispatcher.querySelector("form");
+function openDispatch() {
+  if (dispatcher.open) return;
+  dispatchForm.reset();
+  dispatchForm.querySelector(".where-slot").innerHTML = whereSelect();
+  dispatchForm.querySelector(".err").hidden = true;
+  dispatcher.showModal();
+  dispatchForm.prompt.focus();
+}
+dispatchForm.querySelector(".cancel").addEventListener("click", () => dispatcher.close());
+dispatchForm.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) dispatchForm.requestSubmit();
+});
+dispatchForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const button = dispatchForm.querySelector("button[type=submit]");
   button.disabled = true;
-  button.textContent = `Finding a place under ${n.title}…`;
+  button.textContent = "Finding a place…";
   try {
-    const d = await post("dispatch", { path: n.path, prompt, host });
-    editing = false;
+    const d = await post("dispatch", { path: "", prompt: dispatchForm.prompt.value, host: dispatchForm.host?.value });
+    dispatcher.close();
     await load();
     reveal(d.path);
     await select(d.path);
     openTerminal(d.tmux, d.path, d.host);
   } catch (err) {
-    button.disabled = false;
-    button.textContent = "Dispatch";
-    const el = form.querySelector(".err");
+    const el = dispatchForm.querySelector(".err");
     el.textContent = err.message;
     el.hidden = false;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Dispatch";
   }
-}
+});
 
 panel.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && e.target.form) e.target.form.requestSubmit();
@@ -872,7 +904,11 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   xterm.open(el);
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
-    if (e.key === "Escape" || (e.key === "." && e.metaKey)) e.stopPropagation();
+    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k"))) e.stopPropagation();
+    if (e.key === "k" && e.metaKey) {
+      if (e.type === "keydown") openDispatch();
+      return false;
+    }
     if (e.key === "Escape") {
       if (e.type === "keydown") e.shiftKey ? send("\x1b") : closeTerminal();
       return false;
@@ -961,7 +997,7 @@ async function openFocusForm(kind) {
   openForm(kind);
 }
 document.getElementById("new").addEventListener("click", () => openFocusForm("child"));
-document.getElementById("dispatch").addEventListener("click", () => openFocusForm("dispatch"));
+document.getElementById("dispatch").addEventListener("click", openDispatch);
 svg.on("click", () => selected !== null && closePanel());
 addEventListener("hashchange", () => {
   if (!tree) return;
@@ -971,6 +1007,11 @@ addEventListener("hashchange", () => {
 document.getElementById("mapbtn").addEventListener("click", () => term && closeTerminal());
 addEventListener("resize", () => relayout(0));
 addEventListener("keydown", (e) => {
+  if (e.key === "k" && e.metaKey) {
+    e.preventDefault();
+    return openDispatch();
+  }
+  if (dispatcher.open) return; // the dialog handles its own Escape
   if (e.key === "." && e.metaKey) {
     e.preventDefault();
     return toggleTerminal();
@@ -980,7 +1021,7 @@ addEventListener("keydown", (e) => {
   if (e.key === "f" && !typing && !term && !e.metaKey && !e.ctrlKey) return fitView(500);
   if (e.key === "/" && !typing && !term) {
     e.preventDefault();
-    return openFocusForm("dispatch");
+    return openDispatch();
   }
   if (e.key !== "Escape" || term) return;
   if (editing) return closeForm();

@@ -8,8 +8,9 @@ import { adoptSession, createNode, EditError, endSession, moveNode, removeNode, 
 import { PathError } from "../core/paths.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
 import { liveTmuxSessions } from "../core/sessions.ts";
+import { markSeen, readSeen } from "../core/seen.ts";
 import { readUsage } from "../core/usage.ts";
-import { attachWorkerSessions, readNodeDetail, readTree } from "../core/tree.ts";
+import { attachWorkerSessions, flatten, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type WorkerState } from "../core/workers.ts";
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -48,7 +49,10 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   adopt: (root, b) => adoptSession(root, String(b.session ?? "")),
   dispatch: (root, b) => dispatch(root, b.path, String(b.prompt ?? ""), b.host || undefined),
   queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
+  seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),
 };
+const liveSessionIds = (root: string) =>
+  new Set(flatten(attachWorkerSessions(readTree(root), workers)).flatMap((n) => n.sessions.map((s) => s.sessionId)));
 
 export function createServer(root: string) {
   const poll = async () => {
@@ -67,6 +71,7 @@ export function createServer(root: string) {
     const url = new URL(req.url ?? "/", "http://localhost");
     try {
       if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
+      if (url.pathname === "/api/seen") return json(res, 200, readSeen(root));
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));

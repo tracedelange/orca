@@ -25,8 +25,8 @@
   </svg>
 
   <aside id="rail" hidden>
-    <div class="rail-head">Sessions</div>
-    <ol></ol>
+    <section data-group="working" hidden><div class="rail-head">Working</div><ol></ol></section>
+    <section data-group="rest" hidden><div class="rail-head">Sessions</div><ol></ol></section>
   </aside>
 
   <!-- Legend: state is carried by stroke and label, not colour alone. A circle shows the most urgent session below it. -->
@@ -44,6 +44,15 @@
   <p id="hint">click to unpack · drag to pan · pinch to zoom · f to fit</p>
 
   <aside id="panel" hidden></aside>
+
+  <!-- Dispatch: ⌘K from anywhere. Haiku places the task in the whole tree. -->
+  <dialog id="dispatcher">
+    <form class="form">
+      <label><span>What needs doing?</span><textarea name="prompt" rows="6" required placeholder="Plain instructions. Orca files it into the tree and starts Claude on it."></textarea></label>
+      <div class="row"><button type="submit">Dispatch</button><button class="cancel" type="button">Cancel</button><span class="where-slot"></span><span class="hint">⌘↵</span></div>
+      <p class="err" hidden></p>
+    </form>
+  </dialog>
 
   <!-- Terminal mode: one session fills the space right of the rail. -->
   <section id="termview" hidden>

@@ -85,7 +85,7 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 
 /* Terminal mode: the map and its controls step aside. */
 .mode-term #map, .mode-term #legend, .mode-term #panel,
-.mode-term #about, .mode-term #new, .mode-term #dispatch, .mode-term #lock, .mode-term #archived { display: none; }
+.mode-term #about, .mode-term #new, .mode-term #lock, .mode-term #archived { display: none; }
 .mode-term #mapbtn { display: inline-block; }
 #termview {
   position: fixed;
@@ -231,6 +231,8 @@ body:not(.mode-term) #rail { bottom: 200px; background: var(--paper-2); border: 
   padding: 8px 0 10px;
   border-bottom: 1px solid var(--ink-3);
 }
+#rail section[hidden] { display: none; }
+#rail section:not([hidden]) ~ section .rail-head { padding-top: 18px; }
 #rail ol { list-style: none; margin: 0; padding: 0; }
 #rail li { position: relative; }
 #rail li button.end {
@@ -262,15 +264,14 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 }
 #rail li button:hover, #rail li button.open { background: var(--paper-2); }
 #rail li button.a-needs { border-left-color: var(--accent); }
-#rail li button.a-new { border-left-color: var(--ink); }
+#rail li button.a-new { border-left-color: var(--accent); }
 #rail li button { min-width: 0; }
 #rail .line { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
 #rail .mark { font: 11px var(--mono); width: 12px; }
-#rail .a-needs .mark, #rail .a-needs .st { color: var(--accent); }
+#rail .a-needs .mark, #rail .a-needs .st, #rail .a-new .mark, #rail .a-new .st { color: var(--accent); }
 #rail .name { font: 600 15px var(--serif); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #rail .st { font: 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
-#rail .a-new .st { color: var(--ink); }
-#rail .a-ready .name, #rail .a-ready .sum { color: var(--ink-2); }
+#rail .a-ready .name, #rail .a-ready .sum, #rail .a-ready .mark { color: var(--ink-2); }
 #rail .sum {
   font: 14px/1.35 var(--serif);
   display: -webkit-box;
@@ -319,12 +320,12 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .issues { list-style: none; padding: 10px 12px; margin: 0 0 22px; border: 1px solid var(--ink-3); font: 12px/1.5 var(--mono); }
 #panel .issues li::before { content: "! "; color: var(--accent); }
 
-#panel .actions { display: flex; gap: 8px; margin: 0 0 16px; }
-#panel .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
-#panel .form[hidden] { display: none; }
-#panel .form label { display: grid; gap: 5px; }
-#panel .form label span { font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-#panel .form input, #panel .form textarea, #panel .form select {
+#panel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+:is(#panel, #dispatcher) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
+:is(#panel, #dispatcher) .form[hidden] { display: none; }
+:is(#panel, #dispatcher) .form label { display: grid; gap: 5px; }
+:is(#panel, #dispatcher) .form label span { font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+:is(#panel, #dispatcher) .form input, :is(#panel, #dispatcher) .form textarea, :is(#panel, #dispatcher) .form select {
   font: 15px var(--serif);
   color: var(--ink);
   background: var(--paper);
@@ -333,11 +334,20 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   padding: 7px 9px;
   resize: vertical;
 }
-#panel .form input:focus, #panel .form textarea:focus, #panel .form select:focus { outline: none; border-color: var(--ink); }
-#panel .form .row { display: flex; gap: 8px; }
-#panel .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
-#panel .form .err { margin: 0; font: 12px var(--mono); color: var(--accent); }
-#panel .form .err[hidden] { display: none; }
+:is(#panel, #dispatcher) .form input:focus, :is(#panel, #dispatcher) .form textarea:focus, :is(#panel, #dispatcher) .form select:focus { outline: none; border-color: var(--ink); }
+:is(#panel, #dispatcher) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(#panel, #dispatcher) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+:is(#panel, #dispatcher) .form .err { margin: 0; font: 12px var(--mono); color: var(--accent); }
+:is(#panel, #dispatcher) .form .err[hidden] { display: none; }
+#dispatcher {
+  width: min(560px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--ink-3);
+  background: var(--paper-2);
+  color: var(--ink);
+}
+#dispatcher::backdrop { background: rgb(0 0 0 / 0.3); }
+#dispatcher .form { border: none; margin: 0; padding: 20px; }
 #panel .sessions { margin: 0 0 22px; }
 #panel .sec-head {
   display: flex;
@@ -359,7 +369,7 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .sessions .cwd { font: 11px var(--mono); color: var(--ink-3); margin-top: 4px; overflow-wrap: anywhere; }
 #panel .sessions .a-needs .state { color: var(--accent); }
 #panel .sessions p { margin: 6px 0 8px; font-size: 15px; line-height: 1.4; }
-#panel .sessions .row, #panel .sec-head .row { display: flex; gap: 8px; }
+#panel .sessions .row, #panel .sec-head .row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 select.where {
   font: 10px var(--mono);
   color: var(--ink-2);
