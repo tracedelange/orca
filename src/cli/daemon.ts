@@ -32,6 +32,8 @@ const plist = () => `<?xml version="1.0" encoding="UTF-8"?>
   <dict>
     <!-- launchd's default PATH has no tmux, claude or git. -->
     <key>PATH</key><string>${process.env.PATH}</string>
+    <!-- Without a UTF-8 locale, tmux attach draws non-ASCII characters as "_". -->
+    <key>LANG</key><string>${process.env.LANG || "en_US.UTF-8"}</string>
     <key>PORT</key><string>${port}</string>
   </dict>
   <key>RunAtLoad</key><true/>
@@ -46,6 +48,8 @@ function start() {
   // Rewrite the plist each time, so it follows the current node binary, PATH and PORT.
   fs.writeFileSync(PLIST, plist());
   if (loaded()) launchctl("bootout", TARGET);
+  // bootout returns before launchd has unloaded the job, and bootstrap fails until it has.
+  while (loaded()) execFileSync("sleep", ["0.1"]);
   launchctl("bootstrap", `gui/${process.getuid!()}`, PLIST);
   console.log(`orca started on ${url}`);
 }
