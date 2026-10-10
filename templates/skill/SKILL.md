@@ -10,7 +10,7 @@ orca shows Claude sessions on a map of nodes (folders in `~/nodes`, each with a 
 1. If the user named a node path (for example `work/gcp-bill`), run:
 
    ```sh
-   nodes claim <path>
+   orca claim <path>
    ```
 
    The node is created if it does not exist.
@@ -18,7 +18,7 @@ orca shows Claude sessions on a map of nodes (folders in `~/nodes`, each with a 
 2. If the user did not name a node, write one or two plain sentences that say what this session is working on, from the conversation so far. Then run:
 
    ```sh
-   nodes claim --auto "<your sentences>"
+   orca claim --auto "<your sentences>"
    ```
 
    To keep the new node under a branch the user mentioned, add `--scope <path>`, for example `--scope personal`.
@@ -29,4 +29,4 @@ orca shows Claude sessions on a map of nodes (folders in `~/nodes`, each with a 
 
 5. Tell the user, in one line, which node this session is now attached to.
 
-If `nodes` is not found, tell the user to run `npm link` in the orca repository.
+If `orca` is not found, tell the user to run `npm link` in the orca repository.

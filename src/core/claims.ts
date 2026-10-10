@@ -4,7 +4,7 @@ import { isAlive } from "../remote/state.mjs";
 
 export { findClaudePid } from "../remote/state.mjs";
 
-// A claim attaches a Claude process to a node regardless of its folder. Written by `nodes claim`,
+// A claim attaches a Claude process to a node regardless of its folder. Written by `orca claim`,
 // read by the hook, and gone once the process exits.
 const claimsDir = (root: string) => path.join(root, ".orca", "claims");
 

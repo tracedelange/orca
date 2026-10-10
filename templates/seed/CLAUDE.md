@@ -26,7 +26,7 @@ YAML frontmatter, then Markdown:
     - YYYY-MM-DD: what happened
 
 ## Creating a child node
-Run `nodes new <path> --title "..." --goal "..."`. The path is relative to this root.
+Run `orca new <path> --title "..." --goal "..."`. The path is relative to this root.
 If the CLI is not available, make the directory and write a `CLAUDE.md` in the format above.
 When you change a node, add a dated line to its Log.
 

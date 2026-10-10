@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "bin": {
-    "nodes": "bin/nodes.js"
+    "orca": "bin/orca.js",
+    "nodes": "bin/orca.js"
   },
   "scripts": {
     "start": "node bin/orca-server.js",
+    "setup": "npm install && npm link && orca install-hooks && orca start",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true"

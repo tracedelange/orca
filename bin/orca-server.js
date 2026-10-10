@@ -1,3 +1,3 @@
 #!/usr/bin/env node
-// Plain JS entry so PM2 runs it with node instead of its own .ts interpreter.
+// Plain JS entry, so launchd can run it with node.
 import "../src/server/main.ts";

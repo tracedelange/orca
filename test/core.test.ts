@@ -8,7 +8,7 @@ import { parseNode } from "../src/core/node.ts";
 import { PathError, resolveInRoot } from "../src/core/paths.ts";
 import { flatten, readTree } from "../src/core/tree.ts";
 
-const CLI = path.resolve(import.meta.dirname, "../bin/nodes.js");
+const CLI = path.resolve(import.meta.dirname, "../bin/orca.js");
 
 function seededRoot(): string {
   const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");

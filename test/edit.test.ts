@@ -11,7 +11,7 @@ import { flatten, readNodeDetail, readTree } from "../src/core/tree.ts";
 
 function seededRoot(): string {
   const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");
-  execFileSync(path.resolve(import.meta.dirname, "../bin/nodes.js"), ["init"], { env: { ...process.env, NODES_ROOT: root } });
+  execFileSync(path.resolve(import.meta.dirname, "../bin/orca.js"), ["init"], { env: { ...process.env, NODES_ROOT: root } });
   return root;
 }
 const paths = (root: string) => flatten(readTree(root)).map((n) => n.path);

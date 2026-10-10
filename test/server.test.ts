@@ -9,7 +9,7 @@ import { after, before, test } from "node:test";
 import { createServer } from "../src/server/app.ts";
 
 const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");
-execFileSync(path.resolve(import.meta.dirname, "../bin/nodes.js"), ["init"], { env: { ...process.env, NODES_ROOT: root } });
+execFileSync(path.resolve(import.meta.dirname, "../bin/orca.js"), ["init"], { env: { ...process.env, NODES_ROOT: root } });
 const server = createServer(root);
 let base = "";
 

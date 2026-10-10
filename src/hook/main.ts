@@ -20,7 +20,7 @@ function run(input: { session_id?: string; cwd?: string; notification_type?: str
   if (!input.session_id || !input.cwd || !fs.existsSync(root)) return;
   const realRoot = fs.realpathSync(root);
   const cwd = fs.realpathSync(input.cwd);
-  // Which node: the one orca launched this session for (ORCA_NODE), then a claim (from `nodes claim`),
+  // Which node: the one orca launched this session for (ORCA_NODE), then a claim (from `orca claim`),
   // then the folder. Only look up our pid when claims exist.
   const launched = process.env.ORCA_NODE !== undefined ? path.join(realRoot, process.env.ORCA_NODE) : undefined;
   const pid = hasClaims(realRoot) ? findClaudePid() : undefined;

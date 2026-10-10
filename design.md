@@ -43,7 +43,7 @@ There is no database. The node tree is a folder tree.
 
 When Claude Code starts in a folder, it loads every `CLAUDE.md` from that folder up through its ancestors. Each node is a folder with a `CLAUDE.md`. As a result, a session in a node gets the context of that node and of every node above it. Hierarchical context costs nothing to implement. This behavior was tested with `/memory` in Claude Code.
 
-The ancestor files load in full into every session below them. For this reason, organizational nodes must stay short. `nodes check` gives a warning for a node with children whose `CLAUDE.md` body is more than 40 lines.
+The ancestor files load in full into every session below them. For this reason, organizational nodes must stay short. `orca check` gives a warning for a node with children whose `CLAUDE.md` body is more than 40 lines.
 
 Claude Code removes YAML frontmatter before it loads a `CLAUDE.md`. Agents do not see frontmatter fields. For this reason, the goal of a node is in the body, not in the frontmatter.
 
@@ -92,7 +92,7 @@ The body sections:
 | `## Queue` | A checklist of tasks for background workers. The server runs it (see Queues). |
 | `## Log` | Dated lines. Agents add a line when they change the node. |
 
-Unknown frontmatter fields stay in the file, and the viewer shows them. Old `status` and `goal` frontmatter fields are not used. The viewer ignores `status`. If a file has `goal` in its frontmatter, the viewer shows it, and `nodes check` gives a warning that agents cannot see it.
+Unknown frontmatter fields stay in the file, and the viewer shows them. Old `status` and `goal` frontmatter fields are not used. The viewer ignores `status`. If a file has `goal` in its frontmatter, the viewer shows it, and `orca check` gives a warning that agents cannot see it.
 
 A file with missing or malformed frontmatter is still a valid node. The viewer shows it with an issue count and does not drop it.
 
@@ -120,7 +120,7 @@ The reporting rule tells agents to end every reply with one line: `Status: <one 
 
 ### The hook
 
-`nodes install-hooks` adds the orca hook to `~/.claude/settings.json` for six events: `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Notification`, `Stop`, and `SessionEnd`. Other hooks in that file stay. The command keeps a backup at `settings.json.orca-backup`. `nodes install-hooks --remove` removes the orca hook.
+`orca install-hooks` adds the orca hook to `~/.claude/settings.json` for six events: `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Notification`, `Stop`, and `SessionEnd`. Other hooks in that file stay. The command keeps a backup at `settings.json.orca-backup`. `orca install-hooks --remove` removes the orca hook.
 
 The hook runs in every Claude session on the hub. It never fails a session. If it cannot find a node for a session, it does nothing.
 
@@ -148,18 +148,18 @@ A session stays live while its Claude process runs. The server removes a session
 
 ### Claims and the orca skill
 
-`nodes install-hooks` also installs the `/orca` skill at `~/.claude/skills/orca/`. In a session in any folder, the skill registers the session with orca:
+`orca install-hooks` also installs the `/orca` skill at `~/.claude/skills/orca/`. In a session in any folder, the skill registers the session with orca:
 
-- If the person names a node path, the skill runs `nodes claim <path>`. The node is created if it does not exist.
-- If the person names no node, Claude writes one or two sentences about the session, and the skill runs `nodes claim --auto "<sentences>"`. Placement (see Dispatch) picks or creates the node.
+- If the person names a node path, the skill runs `orca claim <path>`. The node is created if it does not exist.
+- If the person names no node, Claude writes one or two sentences about the session, and the skill runs `orca claim --auto "<sentences>"`. Placement (see Dispatch) picks or creates the node.
 
-`nodes claim` finds the Claude process above it and writes a claim for that process. It then prints the `CLAUDE.md` chain of the node, so the session learns its goal and the reporting rule. A claim ends when its process exits.
+`orca claim` finds the Claude process above it and writes a claim for that process. It then prints the `CLAUDE.md` chain of the node, so the session learns its goal and the reporting rule. A claim ends when its process exits.
 
 ### Moving a session into orca
 
 The viewer can show a terminal only for a session that runs in tmux. A session in a normal terminal window belongs to that terminal app.
 
-"Move into orca" (`nodes adopt <session-id>`) moves such a session into tmux:
+"Move into orca" (`orca adopt <session-id>`) moves such a session into tmux:
 
 1. Orca sends SIGTERM to the Claude process. Claude saves the conversation and exits.
 2. Orca starts `claude --resume <session-id>` in tmux, in the same folder, with `ORCA_NODE` set.
@@ -168,27 +168,30 @@ The move is possible only when the session state is `ready`, so it never stops a
 
 ## Components
 
-### 1. CLI: `nodes`
+### 1. CLI: `orca`
 
-A TypeScript CLI. `npm link` puts it on the `PATH`.
+A TypeScript CLI. `npm link` puts it on the `PATH`. `nodes` is an alias.
 
 | Command | What it does |
 |---|---|
-| `nodes init` | Creates the root folder with the root conventions file and the seed tree, if the root does not exist. |
-| `nodes new <path> [--title] [--goal]` | Creates a node. Missing parents become nodes with only a title. It does not overwrite a `CLAUDE.md`. |
-| `nodes set <path> [--title] [--goal]` | Changes the title or the goal. Other fields, YAML comments, and the body stay. An empty goal removes the `## Goal` section. |
-| `nodes mv <from> <to>` | Moves or renames a node with its subtree. The new parent must be a node. |
-| `nodes rm <path>` | Moves a node with its subtree to `<root>/.trash/`. |
-| `nodes tree` | Prints the tree with the sessions of each node. |
-| `nodes check` | Finds parse errors, missing titles, frontmatter goals, and oversized organizational nodes. It exits with 1 on errors, not on warnings. |
-| `nodes launch <path> [--resume] [--host]` | Starts Claude in tmux for a node. `--resume` opens the last conversation of the node. `--host` starts it on a worker. |
-| `nodes dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. |
-| `nodes queue <path> ["<task>"]` | Adds a task to the queue of the node. Without a task, it prints the queue. |
-| `nodes end <tmux-name or session-id>` | Ends a session on the hub or on a worker. |
-| `nodes claim <path>` or `--auto "<text>" [--scope]` | Attaches the current Claude session to a node. The `/orca` skill runs it. |
-| `nodes adopt <session-id>` | Moves a session that runs outside tmux into tmux. |
-| `nodes worker add <host>`, `rm <host>`, `ls` | Manages workers. |
-| `nodes install-hooks [--remove]` | Installs the hook and the `/orca` skill. |
+| `orca start` | Writes `~/Library/LaunchAgents/com.orca.server.plist` and loads it with launchd. The server starts at login and restarts after a crash. |
+| `orca stop` | Unloads the server and removes the plist. |
+| `orca restart` / `status` / `open` / `logs` | Restarts the server, shows its state, opens the viewer, or follows `~/Library/Logs/orca.log`. |
+| `orca init` | Creates the root folder with the root conventions file and the seed tree, if the root does not exist. |
+| `orca new <path> [--title] [--goal]` | Creates a node. Missing parents become nodes with only a title. It does not overwrite a `CLAUDE.md`. |
+| `orca set <path> [--title] [--goal]` | Changes the title or the goal. Other fields, YAML comments, and the body stay. An empty goal removes the `## Goal` section. |
+| `orca mv <from> <to>` | Moves or renames a node with its subtree. The new parent must be a node. |
+| `orca rm <path>` | Moves a node with its subtree to `<root>/.trash/`. |
+| `orca tree` | Prints the tree with the sessions of each node. |
+| `orca check` | Finds parse errors, missing titles, frontmatter goals, and oversized organizational nodes. It exits with 1 on errors, not on warnings. |
+| `orca launch <path> [--resume] [--host]` | Starts Claude in tmux for a node. `--resume` opens the last conversation of the node. `--host` starts it on a worker. |
+| `orca dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. |
+| `orca queue <path> ["<task>"]` | Adds a task to the queue of the node. Without a task, it prints the queue. |
+| `orca end <tmux-name or session-id>` | Ends a session on the hub or on a worker. |
+| `orca claim <path>` or `--auto "<text>" [--scope]` | Attaches the current Claude session to a node. The `/orca` skill runs it. |
+| `orca adopt <session-id>` | Moves a session that runs outside tmux into tmux. |
+| `orca worker add <host>`, `rm <host>`, `ls` | Manages workers. |
+| `orca install-hooks [--remove]` | Installs the hook and the `/orca` skill. |
 
 `mv` and `rm` refuse while a local session is live anywhere in the subtree.
 
@@ -200,7 +203,7 @@ The CLI, the server, and the hook use one shared module in `src/core/` for the t
 - It binds to `127.0.0.1` only. The default port is 4317. The environment variable `PORT` changes it.
 - It reads the tree from disk on each request. At tens to low hundreds of nodes, this is fast and has no cache faults.
 - It polls each worker in the background every 5 seconds. A slow or offline worker never delays a request.
-- PM2 (`pm2 start bin/orca-server.js --name orca`) keeps it running. After a server change, `pm2 restart orca` loads the new code.
+- launchd keeps it running (`orca start`). It starts at login and restarts after a crash. After a server change, `orca restart` loads the new code.
 
 Endpoints:
 
@@ -267,7 +270,7 @@ A result stays new until the person opens the terminal of that session. The brow
 
 **Detail panel.** A click on a leaf, or on the `i` mark of a container, opens the panel. The panel shows the title, goal, fields, issues, sessions, and the rendered body. It has a copy button for the path of the `CLAUDE.md`. Its controls:
 
-- Edit, Add child, Move, and Delete do the same as `nodes set`, `new`, `mv`, and `rm`. Delete moves the node to `.trash`.
+- Edit, Add child, Move, and Delete do the same as `orca set`, `new`, `mv`, and `rm`. Delete moves the node to `.trash`.
 - Launch and Resume start a session. A picker selects the hub or a worker.
 - Terminal, End, and Move into orca act on each session.
 - End needs a second click when the session is working or needs the person.
@@ -301,7 +304,7 @@ The placement stays inside the subtree of the root. A placement takes about 8 se
 
 A worker runs sessions that the hub shows, streams, and controls. The orca server never listens outside `127.0.0.1`, because the hub pulls everything over SSH.
 
-- `nodes worker add <host>` copies the plain JavaScript files in `src/remote/` to `~/.orca/bin` on the worker. It installs the worker hook in the `~/.claude/settings.json` of the worker and records the worker name.
+- `orca worker add <host>` copies the plain JavaScript files in `src/remote/` to `~/.orca/bin` on the worker. It installs the worker hook in the `~/.claude/settings.json` of the worker and records the worker name.
 - The worker hook records every Claude session on the worker in `~/.orca/sessions/`.
 - The hub runs `list.mjs` on the worker over one persistent SSH connection. The script returns the live sessions and removes dead ones.
 - A worker session goes to the node that orca launched it for. If orca did not launch it, it goes to the node with a matching `<worker>:<path>` repo. Other worker sessions do not show.
@@ -310,13 +313,13 @@ A worker runs sessions that the hub shows, streams, and controls. The orca serve
 
 Do these steps once for each worker:
 
-1. Run `nodes worker add <host>` on the hub.
+1. Run `orca worker add <host>` on the hub.
 2. On the worker, run `cd ~/orca && claude`.
 3. Trust the folder. Then new node folders under `~/orca` do not stop at the trust prompt.
 
 ## Seed tree
 
-`nodes init` creates this example. The person replaces it with real nodes.
+`orca init` creates this example. The person replaces it with real nodes.
 
 ```
 ~/nodes/
@@ -391,8 +394,8 @@ The manager keeps the conflict retries in memory. A restart of the server sets a
 
 The test suite (`npm test`) and manual tests cover these items:
 
-1. `nodes init` creates the seed tree, and `nodes check` passes on it.
-2. A new node from `nodes new` or from the viewer shows in the viewer within one poll, without a page reload.
+1. `orca init` creates the seed tree, and `orca check` passes on it.
+2. A new node from `orca new` or from the viewer shows in the viewer within one poll, without a page reload.
 3. A hand edit of a node file shows in the viewer within one poll.
 4. The viewer draws only the root and the children of unpacked nodes.
 5. The root, the unpacked nodes, and the breadcrumb survive a reload. The back button returns to the last root.

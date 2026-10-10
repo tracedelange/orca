@@ -28,7 +28,7 @@ export const USER_SETTINGS = path.join(os.homedir(), ".claude", "settings.json")
 const SKILL_SRC = fileURLToPath(new URL("../../templates/skill/SKILL.md", import.meta.url));
 export const USER_SKILL = path.join(os.homedir(), ".claude", "skills", "orca", "SKILL.md");
 
-// The /orca skill lets a session anywhere register itself with `nodes claim`.
+// The /orca skill lets a session anywhere register itself with `orca claim`.
 export function installSkill(file = USER_SKILL, remove = false) {
   if (remove) return fs.rmSync(path.dirname(file), { recursive: true, force: true });
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -108,7 +108,7 @@ export const tmuxBase = (root: string, dir: string) => "orca-" + (path.relative(
 
 export function launch(root: string, rel: string, opts: LaunchOptions = {}): string {
   const dir = resolveInRoot(root, rel);
-  if (!hooksInstalled()) throw new Error('orca hooks are not installed; run "nodes install-hooks"');
+  if (!hooksInstalled()) throw new Error('orca hooks are not installed; run "orca install-hooks"');
   const node = parseNode(fs.readFileSync(path.join(dir, "CLAUDE.md"), "utf8"), path.basename(dir));
 
   const base = tmuxBase(root, dir);
