@@ -182,6 +182,7 @@ orca dispatch work "..." --host my-worker
 
 - When you open a terminal, the viewer goes into terminal mode. The session fills the space to the right of the rail, and a click in the rail changes the session.
 - Esc goes back to the map, on the node of that session. Shift+Esc sends Escape to Claude. ⌘. changes between the map and the last terminal.
+- ⌥Tab opens the next session in the rail, and ⌥⇧Tab opens the previous one. This works on the map and in a terminal.
 - A registered session that runs outside tmux has no Terminal button. Use Move into orca in the panel, or `orca adopt <session id>`. Orca stops that Claude process, which saves the conversation. Then orca resumes the conversation in tmux, in the same folder. This works only between turns.
 
 ### Actions

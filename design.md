@@ -284,6 +284,7 @@ A result stays new until the person opens the terminal of that session. The brow
 | Esc | Back to the map, at the node of the session, with its panel open. |
 | Shift+Esc | Sends Escape to Claude, for example to stop a turn. |
 | ⌘. | Toggles between the map and the last terminal. |
+| ⌥Tab, ⌥⇧Tab | Opens the next or previous rail row, as a click does. Works on the map too. |
 
 **Refresh.** The viewer polls `/api/tree` every 5 seconds. It updates in place and keeps the root, the unpacked nodes, the panel, and the open terminal.
 

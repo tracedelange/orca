@@ -566,6 +566,15 @@ rail.addEventListener("click", async (e) => {
   else markSeen([s]);
 });
 
+// ⌥Tab and ⌥⇧Tab step down and up the rail in its shown order, wrapping, as a click would.
+function stepRail(back) {
+  const rows = [...rail.querySelectorAll("button[data-sid]")];
+  if (!rows.length) return;
+  const at = rows.findIndex((r) => (term ? r.classList.contains("open") : r.dataset.path === selected));
+  const next = at < 0 ? (back ? rows.length - 1 : 0) : (at + (back ? -1 : 1) + rows.length) % rows.length;
+  rows[next].click();
+}
+
 // The trail from the top of the tree to the root. Click a step to make it the root.
 function renderCrumbs() {
   crumbs.replaceChildren();
@@ -901,7 +910,12 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   xterm.open(el);
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
-    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k"))) e.stopPropagation();
+    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k")) || (e.altKey && e.key === "Tab")) e.stopPropagation();
+    if (e.key === "Tab" && e.altKey) {
+      e.preventDefault(); // otherwise the browser moves focus, out to its own toolbar
+      if (e.type === "keydown") stepRail(e.shiftKey);
+      return false;
+    }
     if (e.key === "k" && e.metaKey) {
       if (e.type === "keydown") openDispatch();
       return false;
@@ -1032,6 +1046,10 @@ addEventListener("keydown", (e) => {
     return openDispatch();
   }
   if (dispatcher.open) return; // the dialog handles its own Escape
+  if (e.key === "Tab" && e.altKey) {
+    e.preventDefault();
+    return stepRail(e.shiftKey);
+  }
   if (e.key === "." && e.metaKey) {
     e.preventDefault();
     return toggleTerminal();
