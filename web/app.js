@@ -36,6 +36,9 @@ let seenText = "";
 let jobs = []; // dispatches still being placed, or failed: [{ id, prompt, host, startedAt, error }]
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
+let idleMinutes = 30; // children quiet for longer than this share one "others" node
+try { idleMinutes = Number(localStorage.getItem("orca.idleMinutes")) || 30; } catch {}
+const opened = new Set(); // parents whose "others" node was clicked; packing the parent groups them again
 const archivedButton = document.getElementById("archived");
 archivedButton.classList.toggle("on", showArchived);
 
@@ -61,6 +64,8 @@ async function load() {
     graphRoot = nodeAt(pathFromHash());
     render();
   }
+  // Nodes go idle without any change to the data, so check whether the grouping moved.
+  else if (graphRoot && visibleNodes().map((d) => d.data.path).join("|") !== shownKey) render();
   if (term) markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   revealActive();
   renderRail();
@@ -153,6 +158,7 @@ function toggle(d) {
     // Packing a node packs everything inside it, and its children forget their places.
     for (const x of d.descendants()) {
       expanded.delete(x.data.path);
+      opened.delete(x.data.path);
       if (x !== d) pos.delete(x.data.path);
     }
   } else expanded.add(d.data.path);
@@ -314,15 +320,38 @@ svg.node().addEventListener("wheel", (e) => {
 // ---- Nodes ----
 
 // The root and every unpacked node's children; nothing inside a packed node.
+// Idle children of a parent collapse into one "others" node, unless that has been clicked.
 function visibleNodes() {
   const out = [];
   const walk = (d) => {
     out.push(d);
-    if (isUnpacked(d)) for (const c of d.children ?? []) walk(c);
+    if (!isUnpacked(d) || !d.children) return;
+    const idle = opened.has(d.data.path) ? [] : d.children.filter((c) => !isHot(c));
+    if (idle.length < 2) return d.children.forEach(walk);
+    d.children.filter((c) => !idle.includes(c)).forEach(walk);
+    out.push(othersOf(d, idle));
   };
   walk(graphRoot);
   return out;
 }
+
+// A node stays on the map while it is selected, or anything inside it needs you, is working,
+// has an unseen result, or had a message within the last idleMinutes.
+function isHot(d) {
+  if (selected !== null && within(selected, d.data.path)) return true;
+  const since = new Date(Date.now() - idleMinutes * 60000).toISOString();
+  return d.descendants().some((x) => (x.data.lastActive ?? "") > since
+    || x.data.sessions.some((s) => s.updatedAt > since || ["needs", "new", "working"].includes(sessionState(s))));
+}
+
+// A stand-in for a parent's idle children. It draws like a leaf; clicking it shows them.
+const othersOf = (d, idle) => ({
+  others: idle,
+  parent: d,
+  depth: d.depth + 1,
+  data: { path: `${d.data.path}/…`, title: `${idle.length} others`, sessions: [], issues: [] },
+  descendants: () => idle.flatMap((c) => c.descendants()),
+});
 
 // Where a new child starts: on an arc around its parent, facing away from the grandparent.
 function fanOut(d) {
@@ -416,7 +445,8 @@ function build(g) {
   });
   g.on("click", (e, n) => {
     e.stopPropagation();
-    if (!n.d.children || n.d === graphRoot) select(n.path);
+    if (n.d.others) opened.add(n.d.parent.data.path), render();
+    else if (!n.d.children || n.d === graphRoot) select(n.path);
     else toggle(n.d);
   });
   g.select(".info").on("click", function (e) {
@@ -445,7 +475,7 @@ const kindOf = (d) => (d === graphRoot ? "is-root" : !d.children ? "leaf" : isUn
 
 // Sizes animate, so a node grows or shrinks smoothly when it is packed or unpacked.
 function fill(sel, t = d3.transition().duration(0)) {
-  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.d.data.archived ? " archived" : ""}${n.path === selected ? " selected" : ""}`);
+  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.d.data.archived ? " archived" : ""}${n.d.others ? " others" : ""}${n.path === selected ? " selected" : ""}`);
   sel.select(".halo").transition(t).attr("r", (n) => (n.d === graphRoot ? n.r + 6 : 0));
   sel.select(".rim").transition(t).attr("r", (n) => n.r);
   sel.select(".pulse").transition(t).attr("r", (n) => n.r);
@@ -894,6 +924,20 @@ ender.addEventListener("close", () => ender.returnValue === "end" && end(ender.d
 
 const keyhelp = document.getElementById("keyhelp");
 document.getElementById("keys").addEventListener("click", () => keyhelp.showModal());
+
+// Settings are per browser.
+const settings = document.getElementById("settingsdlg");
+document.getElementById("settings").addEventListener("click", () => {
+  settings.querySelector("[name=idle]").value = idleMinutes;
+  settings.returnValue = "";
+  settings.showModal();
+});
+settings.addEventListener("close", () => {
+  if (settings.returnValue !== "save") return;
+  idleMinutes = Number(settings.querySelector("[name=idle]").value);
+  try { localStorage.setItem("orca.idleMinutes", idleMinutes); } catch {}
+  render();
+});
 dispatchForm.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) dispatchForm.requestSubmit();
 });
@@ -1083,7 +1127,7 @@ addEventListener("keydown", (e) => {
     e.preventDefault();
     return openDispatch();
   }
-  if (dispatcher.open || ender.open || keyhelp.open) return; // the dialogs handle their own Escape
+  if (dispatcher.open || ender.open || keyhelp.open || settings.open) return; // the dialogs handle their own Escape
   if (e.code === "KeyQ" && e.altKey) {
     e.preventDefault();
     return confirmEnd();

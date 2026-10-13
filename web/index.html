@@ -23,6 +23,7 @@
     <button id="archived" type="button" title="Show archived nodes">Archived</button>
     <button id="mapbtn" type="button">Map</button>
     <button id="theme" type="button" title="Theme: system, light or dark"></button>
+    <button id="settings" type="button">Settings</button>
     <button id="keys" type="button" title="Keyboard shortcuts">?</button>
   </header>
 
@@ -82,6 +83,14 @@
         <tr><th>⌥Q</th><td>End the current session, after Enter</td></tr>
       </table>
       <div class="row"><button type="submit" autofocus>Close</button></div>
+    </form>
+  </dialog>
+
+  <!-- Settings: from the header. Saved in this browser. -->
+  <dialog id="settingsdlg">
+    <form class="form" method="dialog">
+      <label><span>Group nodes idle for longer than (minutes)</span><input name="idle" type="number" min="1" required></label>
+      <div class="row"><button type="submit" value="save">Save</button><button type="submit" value="" formnovalidate>Cancel</button></div>
     </form>
   </dialog>
 

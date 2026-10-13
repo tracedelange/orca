@@ -3,7 +3,7 @@ import path from "node:path";
 import { marked } from "marked";
 import { parseNode, type NodeFields } from "./node.ts";
 import { expandHome, resolveInRoot } from "./paths.ts";
-import { readSessions, splitRepo, type Session } from "./sessions.ts";
+import { lastSessionFile, readSessions, splitRepo, type Session } from "./sessions.ts";
 import type { WorkerState } from "./workers.ts";
 
 export type TreeNode = NodeFields & {
@@ -11,6 +11,7 @@ export type TreeNode = NodeFields & {
   childCount: number;
   descendantCount: number;
   sessions: Session[];
+  lastActive?: string; // the last hook event in this node, live session or not
   children: TreeNode[];
 };
 
@@ -48,9 +49,13 @@ function readNode(root: string, rel: string): TreeNode {
     childCount: children.length,
     descendantCount: children.reduce((n, c) => n + 1 + c.descendantCount, 0),
     sessions: readSessions(dir),
+    lastActive: lastActive(dir),
     children,
   };
 }
+
+// The hook rewrites last.json on every event, so its mtime is the node's last message.
+const lastActive = (dir: string) => fs.statSync(lastSessionFile(dir), { throwIfNoEntry: false })?.mtime.toISOString();
 
 // The node a Claude session in `cwd` belongs to: the nearest node above it inside the tree,
 // otherwise the node whose repo path contains it most specifically.

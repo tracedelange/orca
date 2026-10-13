@@ -167,6 +167,8 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 .node.is-root .halo { stroke: var(--ink-3); stroke-width: 1; }
 .node.packed .rim { fill: var(--paper-2); }
 .node.open .rim { fill: var(--paper); }
+.node.others .rim { stroke-dasharray: 3 3; fill: var(--paper); }
+.node.others .title { fill: var(--ink-3); }
 .inner { stroke: var(--ink-3); stroke-width: 1; }
 .node.packed .inner { stroke: var(--ink-2); }
 .node:hover .rim { stroke-width: 2.5; }
@@ -340,11 +342,11 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .issues li::before { content: "! "; color: var(--accent); }
 
 #panel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form[hidden] { display: none; }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form label { display: grid; gap: 5px; }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form input, :is(#panel, #dispatcher, #ender, #keyhelp) .form textarea, :is(#panel, #dispatcher, #ender, #keyhelp) .form select {
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form[hidden] { display: none; }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form label { display: grid; gap: 5px; }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form input, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form textarea, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form select {
   font: 15px var(--serif);
   color: var(--ink);
   background: var(--paper);
@@ -353,20 +355,20 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   padding: 7px 9px;
   resize: vertical;
 }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form input:focus, :is(#panel, #dispatcher, #ender, #keyhelp) .form textarea:focus, :is(#panel, #dispatcher, #ender, #keyhelp) .form select:focus { outline: none; border-color: var(--ink); }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
-:is(#panel, #dispatcher, #ender, #keyhelp) .form .err[hidden] { display: none; }
-:is(#dispatcher, #ender, #keyhelp) {
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form input:focus, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form textarea:focus, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form select:focus { outline: none; border-color: var(--ink); }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
+:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .err[hidden] { display: none; }
+:is(#dispatcher, #ender, #keyhelp, #settingsdlg) {
   width: min(560px, calc(100vw - 32px));
   padding: 0;
   border: 1px solid var(--ink-3);
   background: var(--paper-2);
   color: var(--ink);
 }
-:is(#dispatcher, #ender, #keyhelp)::backdrop { background: rgb(0 0 0 / 0.3); }
-:is(#dispatcher, #ender, #keyhelp) .form { border: none; margin: 0; padding: 20px; }
+:is(#dispatcher, #ender, #keyhelp, #settingsdlg)::backdrop { background: rgb(0 0 0 / 0.3); }
+:is(#dispatcher, #ender, #keyhelp, #settingsdlg) .form { border: none; margin: 0; padding: 20px; }
 #keyhelp table { border-collapse: collapse; font: 14px var(--serif); }
 #keyhelp th { font: 500 12px var(--sans); text-align: left; color: var(--ink-2); padding: 4px 18px 4px 0; white-space: nowrap; }
 #keyhelp td { padding: 4px 0; }
