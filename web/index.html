@@ -9,9 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500&family=Brygada+1918:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/vendor/xterm.css">
   <link rel="stylesheet" href="/style.css">
+  <!-- Set the saved theme before first paint so the page does not flash. -->
+  <script>try { const t = localStorage.getItem("orca.theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
   <header>
+    <span id="logo" role="img" aria-label="Orca"></span>
     <span id="logo" role="img" aria-label="Orca"></span>
     <nav id="crumbs"></nav>
     <div id="usage"></div>
@@ -20,6 +23,7 @@
     <button id="dispatch" type="button">Dispatch</button>
     <button id="archived" type="button" title="Show archived nodes">Archived</button>
     <button id="mapbtn" type="button">Map</button>
+    <button id="theme" type="button" title="Theme: system, light or dark"></button>
   </header>
 
   <svg id="map">

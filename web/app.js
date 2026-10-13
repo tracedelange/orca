@@ -890,13 +890,11 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   termview.querySelector(".kicker").textContent = [d?.data.title ?? path, path || "/", host, name].filter(Boolean).join("  ·  ");
   relayout(0);
 
-  const css = getComputedStyle(document.documentElement);
-  const v = (name) => css.getPropertyValue(name).trim();
   const xterm = new Terminal({
     fontFamily: "'Azeret Mono', monospace",
     fontSize: 13,
     cursorBlink: true,
-    theme: { background: v("--paper-2"), foreground: v("--ink"), cursor: v("--ink"), selectionBackground: v("--ink-3") },
+    theme: termTheme(),
   });
   const fit = new FitAddon.FitAddon();
   xterm.loadAddon(fit);
@@ -938,6 +936,12 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   renderRail();
   xterm.focus();
+}
+
+function termTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name) => css.getPropertyValue(name).trim();
+  return { background: v("--paper-2"), foreground: v("--ink"), cursor: v("--ink"), selectionBackground: v("--ink-3") };
 }
 
 function stopTerminal() {
@@ -988,6 +992,23 @@ panel.addEventListener("click", (e) => {
 });
 
 // ---- Wiring ----
+
+// Theme cycles system → light → dark. System removes the override so the CSS media query decides.
+const themeButton = document.getElementById("theme");
+const themes = ["system", "light", "dark"];
+function applyTheme(t) {
+  if (t === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  themeButton.textContent = t;
+  if (term) term.xterm.options.theme = termTheme();
+}
+themeButton.addEventListener("click", () => {
+  const t = themes[(themes.indexOf(document.documentElement.dataset.theme ?? "system") + 1) % themes.length];
+  try { t === "system" ? localStorage.removeItem("orca.theme") : localStorage.setItem("orca.theme", t); } catch {}
+  applyTheme(t);
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => term && (term.xterm.options.theme = termTheme()));
+applyTheme(document.documentElement.dataset.theme ?? "system");
 
 document.getElementById("about").addEventListener("click", () => graphRoot && select(graphRoot.data.path));
 // Header forms act on the root of the graph.

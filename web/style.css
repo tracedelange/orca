@@ -12,8 +12,20 @@
   color-scheme: light dark;
 }
 
+/* data-theme on <html> overrides the system setting; without it the system decides. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #15181b;
+  --paper-2: #1b1f23;
+  --ink: #e5dfd2;
+  --ink-2: #a39d8f;
+  --ink-3: #575b60;
+  --rule: rgba(229, 223, 210, 0.05);
+  --accent: #ff6a4d;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --paper: #15181b;
     --paper-2: #1b1f23;
     --ink: #e5dfd2;
@@ -71,6 +83,8 @@ header > * { pointer-events: auto; flex-shrink: 0; }
 body:not(.mode-term):has(#panel:not([hidden])) header { right: 444px; }
 #crumbs { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #mapbtn { display: none; }
+/* The icon is a mask so it takes the theme's ink colour. */
+#logo { width: 36px; height: 36px; background: var(--ink); mask: url(/orca.svg) center / contain no-repeat; }
 /* The icon is a mask so it takes the theme's ink colour. */
 #logo { width: 36px; height: 36px; background: var(--ink); mask: url(/orca.svg) center / contain no-repeat; }
 
