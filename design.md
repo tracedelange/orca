@@ -13,7 +13,7 @@ Orca has two parts:
 
 - One machine is the **hub**. The hub holds the node tree, runs the orca server, and runs the viewer in a browser. The hub is a macOS laptop.
 - Zero or more other machines are **workers**. A worker runs Claude sessions for the hub. The hub reaches a worker only with `ssh <host>`, for example with Tailscale SSH.
-- The hub needs Node 22.18 or later, tmux, and Claude Code. Node runs the TypeScript source directly, so there is no build step.
+- The hub needs Node 22.18 or later, tmux, and Claude Code. A checkout runs the TypeScript source directly. The npm package runs JavaScript that `tsc` builds into `dist/`.
 - A worker needs Node 18 or later, tmux, and Claude Code. A worker runs only plain JavaScript files.
 - Orca has one user. It has no accounts and no identity checks.
 
@@ -170,7 +170,7 @@ The move is possible only when the session state is `ready`, so it never stops a
 
 ### 1. CLI: `orca`
 
-A TypeScript CLI. `npm link` puts it on the `PATH`. `nodes` is an alias.
+A TypeScript CLI. `npm i -g @tracedelange/orca` (or `npm link` in a checkout) puts it on the `PATH`. `nodes` is an alias.
 
 | Command | What it does |
 |---|---|

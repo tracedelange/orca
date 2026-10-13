@@ -15,6 +15,8 @@ import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type Work
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const JS = "text/javascript; charset=utf-8";
+// Resolve through node, so the files are found whether npm nests or hoists the dependencies.
+const dep = (pkg: string, p: string) => fileURLToPath(new URL(p, import.meta.resolve(pkg)));
 
 // A fixed list of public files, so no request path ever reaches the filesystem directly.
 const STATIC: Record<string, [string, string]> = {
@@ -22,10 +24,10 @@ const STATIC: Record<string, [string, string]> = {
   "/app.js": [file("../../web/app.js"), JS],
   "/style.css": [file("../../web/style.css"), "text/css; charset=utf-8"],
   "/orca.svg": [file("../../web/orca.svg"), "image/svg+xml"],
-  "/vendor/d3.js": [file("../../node_modules/d3/dist/d3.min.js"), JS],
-  "/vendor/xterm.js": [file("../../node_modules/@xterm/xterm/lib/xterm.js"), JS],
-  "/vendor/xterm.css": [file("../../node_modules/@xterm/xterm/css/xterm.css"), "text/css; charset=utf-8"],
-  "/vendor/addon-fit.js": [file("../../node_modules/@xterm/addon-fit/lib/addon-fit.js"), JS],
+  "/vendor/d3.js": [dep("d3", "../dist/d3.min.js"), JS],
+  "/vendor/xterm.js": [dep("@xterm/xterm", "xterm.js"), JS],
+  "/vendor/xterm.css": [dep("@xterm/xterm", "../css/xterm.css"), "text/css; charset=utf-8"],
+  "/vendor/addon-fit.js": [dep("@xterm/addon-fit", "addon-fit.js"), JS],
 };
 
 // Write endpoints. Each takes a JSON body and returns JSON.

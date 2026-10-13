@@ -1,18 +1,36 @@
 {
-  "name": "orca",
+  "name": "@tracedelange/orca",
   "version": "0.1.0",
-  "private": true,
+  "description": "One map for all of your Claude Code sessions, and one place that tells you which session needs you now.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tracedelange/orca.git"
+  },
   "type": "module",
   "bin": {
     "orca": "bin/orca.js",
     "nodes": "bin/orca.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "web",
+    "templates"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "node bin/orca-server.js",
-    "setup": "npm install && npm link && orca install-hooks && orca start",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true"
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build"
   },
   "engines": {
     "node": ">=22.18"

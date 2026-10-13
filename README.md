@@ -38,40 +38,45 @@ See `design.md` for the full specification.
 ## Requirements
 
 - macOS. The server runs under launchd.
-- Node 22.18 or later. Node runs the TypeScript source directly, so there is no build step.
+- Node 22.18 or later.
 - tmux.
 - Claude Code.
 
 ## Installation
 
-1. Clone the repository:
+1. Install orca:
 
    ```sh
-   git clone https://github.com/tracedelange/orca.git
-   cd orca
+   npm i -g @tracedelange/orca
    ```
 
-2. Install orca and start the server:
+2. Install the hook and the `/orca` skill:
 
    ```sh
-   npm run setup
+   orca install-hooks
    ```
 
-   This command runs `npm install`, `npm link`, `orca install-hooks`, and `orca start`.
+3. Start the server:
 
-3. Make the node tree in `~/nodes`:
+   ```sh
+   orca start
+   ```
+
+4. Make the node tree in `~/nodes`:
 
    ```sh
    orca init
    ```
 
-4. Open the viewer:
+5. Open the viewer:
 
    ```sh
    orca open
    ```
 
-`npm link` puts `orca` on your PATH. `nodes` is an alias for `orca`. To remove the hook from `~/.claude/settings.json`, run `orca install-hooks --remove`.
+`nodes` is an alias for `orca`. To remove the hook from `~/.claude/settings.json`, run `orca install-hooks --remove`.
+
+The hook in `~/.claude/settings.json` uses the absolute path of the installed package. If you change the Node version (for example, with nvm), the path changes. Then run `orca install-hooks` again.
 
 ### Settings
 
@@ -194,7 +199,9 @@ orca dispatch work "..." --host my-worker
 
 ## Development
 
-The CLI runs from this checkout, so CLI changes apply immediately. After you change server code, run `orca restart`. `CLAUDE.md` gives the full development loop.
+To run orca from a checkout, clone the repository. Then run `npm install && npm link && orca install-hooks && orca start`.
+
+A checkout runs the TypeScript source directly, so CLI changes apply immediately. After you change server code, run `orca restart`. `CLAUDE.md` gives the full development loop.
 
 ```sh
 npm run typecheck
