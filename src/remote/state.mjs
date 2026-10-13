@@ -1,6 +1,7 @@
-// Session-state logic shared by the laptop's hook (src/hook) and the worker hook (hook.mjs).
+// Session-state and hook-install logic shared by the laptop (src/) and the worker scripts (hook.mjs, install.mjs).
 // Plain JavaScript so it also runs on a worker's older Node, which cannot run TypeScript.
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 
 export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"];
@@ -70,11 +71,15 @@ export function nextSession(prev, event, input, extra) {
 
 const isOrcaHook = (h) => !!h.command?.includes("orca-hook.js") || !!h.command?.includes(".orca/bin/hook.mjs");
 
-export const hooksInstalled = (settings) =>
-  HOOK_EVENTS.every((e) => settings.hooks?.[e]?.some((g) => g.hooks.some(isOrcaHook)));
+const readSettings = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {});
+
+export function hooksInstalled(file) {
+  const { hooks } = readSettings(file);
+  return HOOK_EVENTS.every((e) => hooks?.[e]?.some((g) => g.hooks.some(isOrcaHook)));
+}
 
 // Adds (or with remove, deletes) orca's hook groups in parsed Claude settings. Other hooks are untouched.
-export function mergeHooks(settings, commandFor, remove = false) {
+function mergeHooks(settings, commandFor, remove = false) {
   const hooks = (settings.hooks ??= {});
   for (const event of HOOK_EVENTS) {
     const groups = (hooks[event] ?? []).filter((g) => !g.hooks.some(isOrcaHook));
@@ -83,4 +88,12 @@ export function mergeHooks(settings, commandFor, remove = false) {
     else delete hooks[event];
   }
   return settings;
+}
+
+// Merges orca's hooks into a Claude settings file, keeping a backup of the old one.
+export function writeHooks(file, commandFor, remove = false) {
+  const settings = mergeHooks(readSettings(file), commandFor, remove);
+  if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.orca-backup`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
 }

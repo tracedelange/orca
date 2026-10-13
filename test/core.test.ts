@@ -98,7 +98,7 @@ test("findNodeDir matches inside the tree and by most specific repo", async () =
 });
 
 test("installHooks adds and removes only orca's hooks", async () => {
-  const { installHooks, hooksInstalled } = await import("../src/core/sessions.ts");
+  const { installHooks, hooksInstalled } = await import("../src/core/install.ts");
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "settings.json");
   const mine = { hooks: [{ type: "command", command: "echo mine" }] };
   fs.writeFileSync(file, JSON.stringify({ model: "x", hooks: { Stop: [mine] } }));

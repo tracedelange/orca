@@ -19,16 +19,13 @@ const KNOWN = new Set(["title", "goal", "status", "repo", "branch", "background"
 export function parseNode(text: string, fallbackTitle: string): NodeFields & { body: string } {
   const issues: Issue[] = [];
   let data: Record<string, unknown> = {};
-  let body = text;
 
-  const lines = text.split(/\r?\n/);
-  const end = lines[0]?.trim() === "---" ? lines.findIndex((l, i) => i > 0 && l.trim() === "---") : -1;
-  if (end === -1) {
+  const { frontmatter, body } = splitFrontmatter(text);
+  if (frontmatter === undefined) {
     issues.push({ level: "error", message: "missing frontmatter" });
   } else {
-    body = lines.slice(end + 1).join("\n");
     try {
-      const parsed: unknown = parse(lines.slice(1, end).join("\n"));
+      const parsed: unknown = parse(frontmatter);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) data = parsed as Record<string, unknown>;
       else if (parsed != null) issues.push({ level: "error", message: "frontmatter is not a key/value map" });
     } catch (err) {
@@ -58,9 +55,20 @@ export function parseNode(text: string, fallbackTitle: string): NodeFields & { b
   };
 }
 
-// Text under "## Goal", up to the next heading, as one line.
+// The YAML between the opening and closing "---" lines, and the text after them.
+export function splitFrontmatter(text: string): { frontmatter?: string; body: string } {
+  const lines = text.split(/\r?\n/);
+  const end = lines[0]?.trim() === "---" ? lines.findIndex((l, i) => i > 0 && l.trim() === "---") : -1;
+  if (end === -1) return { body: text };
+  return { frontmatter: lines.slice(1, end).join("\n"), body: lines.slice(end + 1).join("\n") };
+}
+
+// "## Goal" and its text, up to the next heading or the end.
+export const GOAL_SECTION = /^##\s+Goal\s*$([\s\S]*?)(?=^#{1,6}\s|(?![\s\S]))/im;
+
+// Text under "## Goal", as one line.
 function goalSection(body: string): string | undefined {
-  const m = body.match(/^##\s+Goal\s*$([\s\S]*?)(?=^#{1,6}\s|(?![\s\S]))/im);
+  const m = body.match(GOAL_SECTION);
   return m?.[1].trim().replace(/\s+/g, " ") || undefined;
 }
 

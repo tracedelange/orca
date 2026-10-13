@@ -2,13 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { dispatch } from "../core/dispatch.ts";
+import { dispatch, place } from "../core/dispatch.ts";
 import { adoptSession, createNode, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
-import { rootDir } from "../core/paths.ts";
+import { hooksInstalled, installHooks, installSkill, USER_SETTINGS, USER_SKILL } from "../core/install.ts";
+import { resolveInRoot, rootDir } from "../core/paths.ts";
 import { addToQueue, queueItems } from "../core/queue.ts";
 import { claim, findClaudePid } from "../core/claims.ts";
-import { place } from "../core/dispatch.ts";
-import { hooksInstalled, installHooks, installSkill, sessionsDir, USER_SETTINGS, USER_SKILL } from "../core/sessions.ts";
+import { dropSession } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
 import { flatten, nodeContext, readTree, type TreeNode } from "../core/tree.ts";
 import { daemon } from "./daemon.ts";
@@ -16,12 +16,14 @@ import { daemon } from "./daemon.ts";
 const root = rootDir();
 const TEMPLATES = fileURLToPath(new URL("../../templates/", import.meta.url));
 const MARKS: Record<string, string> = { "needs-input": "◆", working: "●", ready: "○" };
+// `orca new` and `orca set` take the same fields.
+const FIELDS = { title: { type: "string" }, goal: { type: "string" } } as const;
 
 const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   new: newNode, mv: move, rm: remove, set, tree: printTree, check, init, launch: launchSession,
   "install-hooks": hooks,
   dispatch: dispatchPrompt,
-  end: end,
+  end,
   claim: claimSession,
   adopt,
   worker,
@@ -49,11 +51,7 @@ try {
 }
 
 function newNode(argv: string[]) {
-  const { values, positionals } = parseArgs({
-    args: argv,
-    allowPositionals: true,
-    options: { title: { type: "string" }, goal: { type: "string" } },
-  });
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: FIELDS });
   if (positionals.length !== 1) throw new Error('usage: orca new <path> [--title "..."] [--goal "..."]');
   requireRoot();
   for (const p of createNode(root, positionals[0], values)) console.log(`created ${p}`);
@@ -65,7 +63,7 @@ function queue(argv: string[]) {
   requireRoot();
   const [rel, ...task] = argv;
   if (task.length) return addToQueue(root, rel, task.join(" "));
-  const file = path.join(root, rel, "CLAUDE.md");
+  const file = path.join(resolveInRoot(root, rel), "CLAUDE.md");
   for (const i of queueItems(fs.readFileSync(file, "utf8"))) console.log(`[${i.mark}] ${i.text}${i.child ? ` → ${i.child}` : ""}`);
 }
 
@@ -82,11 +80,7 @@ function remove(argv: string[]) {
 }
 
 function set(argv: string[]) {
-  const { values, positionals } = parseArgs({
-    args: argv,
-    allowPositionals: true,
-    options: { title: { type: "string" }, goal: { type: "string" } },
-  });
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: FIELDS });
   if (positionals.length !== 1) throw new Error('usage: orca set <path> [--title "..."] [--goal "..."]');
   requireRoot();
   updateNode(root, positionals[0], values);
@@ -172,7 +166,7 @@ async function claimSession(argv: string[]) {
   }
   // Drop this session's state from any node it showed on before; the hook rewrites it on the claimed node.
   for (const n of flatten(readTree(root))) {
-    for (const s of n.sessions.filter((s) => s.pid === pid)) fs.rmSync(path.join(sessionsDir(path.join(root, n.path)), `${s.sessionId}.json`));
+    for (const s of n.sessions.filter((s) => s.pid === pid)) dropSession(path.join(root, n.path), s.sessionId);
   }
   claim(root, path.join(root, rel), pid);
   console.log(`attached this session to ${rel}\n`);

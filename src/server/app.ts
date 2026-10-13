@@ -30,13 +30,13 @@ const STATIC: Record<string, [string, string]> = {
   "/vendor/addon-fit.js": [dep("@xterm/addon-fit", "addon-fit.js"), JS],
 };
 
-// Write endpoints. Each takes a JSON body and returns JSON.
 // Worker sessions, refreshed in the background so a slow or offline worker never delays a request.
 let workers: WorkerState[] = [];
 const workerSession = (id: string) => {
   for (const w of workers) for (const s of w.sessions) if (s.sessionId === id || s.tmux === id) return { w, s };
 };
 
+// Write endpoints. Each takes a JSON body and returns JSON.
 const EDITS: Record<string, (root: string, b: any) => unknown> = {
   create: (root, b) => ({ created: createNode(root, b.path, b) }),
   move: (root, b) => ({ path: moveNode(root, b.from, b.to) }),

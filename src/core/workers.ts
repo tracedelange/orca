@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { parseNode } from "./node.ts";
 import { resolveInRoot } from "./paths.ts";
-import { launch, splitRepo, type Session } from "./sessions.ts";
+import { launch, splitRepo, tmuxBase, type Session } from "./sessions.ts";
 import { nodeContext } from "./tree.ts";
 
 // A worker is another machine that runs Claude sessions. The laptop reaches it only through
@@ -95,7 +95,7 @@ export function startSession(root: string, rel: string, opts: StartOptions = {})
   if (opts.prompt) args.push("--", opts.prompt);
   const spec = {
     dir: repo?.path ?? `~/orca/${relPath || "root"}`,
-    name: "orca-" + (relPath || "root").replace(/[^A-Za-z0-9_-]/g, "-"),
+    name: tmuxBase(root, dir),
     node: relPath.split(path.sep).join("/"),
     args,
   };

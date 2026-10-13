@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseDocument, stringify } from "yaml";
-import { resolveInRoot } from "./paths.ts";
 import { execFileSync } from "node:child_process";
-import { isAlive, launch, sessionsDir } from "./sessions.ts";
+import { GOAL_SECTION, splitFrontmatter } from "./node.ts";
+import { resolveInRoot } from "./paths.ts";
+import { dropSession, isAlive, launch } from "./sessions.ts";
 import { flatten, readTree } from "./tree.ts";
 
 const TEMPLATE = fileURLToPath(new URL("../../templates/node.md", import.meta.url));
@@ -68,12 +69,10 @@ export function removeNode(root: string, rel: string): string {
 // An empty goal removes the ## Goal section. archived: false removes the key.
 export function updateNode(root: string, rel: string, fields: { title?: string; goal?: string; archived?: boolean }) {
   const file = path.join(resolveInRoot(root, rel), "CLAUDE.md");
-  const text = fs.readFileSync(file, "utf8");
-  const lines = text.split("\n");
-  const end = lines[0]?.trim() === "---" ? lines.findIndex((l, i) => i > 0 && l.trim() === "---") : -1;
-  const doc = parseDocument(end === -1 ? "" : lines.slice(1, end).join("\n"));
+  const split = splitFrontmatter(fs.readFileSync(file, "utf8"));
+  const doc = parseDocument(split.frontmatter ?? "");
   if (doc.errors.length) throw new EditError("frontmatter does not parse; fix the file by hand first");
-  let body = end === -1 ? text : lines.slice(end + 1).join("\n");
+  let body = split.body;
 
   if (fields.title !== undefined) {
     if (!fields.title.trim()) throw new EditError("title cannot be empty");
@@ -93,21 +92,17 @@ export function updateNode(root: string, rel: string, fields: { title?: string; 
 // Ends a live session: closes its tmux session (which quits Claude), or signals Claude directly.
 // The conversation stays on disk; `launch` with resume picks it up again. `id` is a session id or tmux name.
 export function endSession(root: string, id: string): string {
-  const node = flatten(readTree(root)).find((n) => n.sessions.some((s) => s.sessionId === id || s.tmux === id));
-  const s = node?.sessions.find((x) => x.sessionId === id || x.tmux === id);
-  if (!node || !s) throw new EditError(`no live session ${id}`);
+  const { node, s } = findSession(root, id);
   if (s.tmux) execFileSync("tmux", ["kill-session", "-t", `=${s.tmux}`]);
   else process.kill(s.pid, "SIGTERM");
-  fs.rmSync(path.join(sessionsDir(path.join(root, node.path)), `${s.sessionId}.json`), { force: true });
+  dropSession(path.join(root, node.path), s.sessionId);
   return node.path;
 }
 
 // Moves a session that runs outside tmux into orca: quits that Claude (which saves the conversation),
 // then resumes the same conversation in tmux, in the same folder, on the same node.
 export function adoptSession(root: string, id: string): { tmux: string; path: string } {
-  const node = flatten(readTree(root)).find((n) => n.sessions.some((s) => s.sessionId === id));
-  const s = node?.sessions.find((x) => x.sessionId === id);
-  if (!node || !s) throw new EditError(`no live session ${id} on this machine`);
+  const { node, s } = findSession(root, id);
   if (s.tmux) throw new EditError("this session already runs in tmux");
   if (s.state !== "ready") throw new EditError("wait until the session finishes its turn, then move it");
 
@@ -117,14 +112,22 @@ export function adoptSession(root: string, id: string): { tmux: string; path: st
     if (Date.now() > deadline) throw new EditError(`Claude (pid ${s.pid}) did not exit; quit it by hand and use Resume`);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
   }
-  fs.rmSync(path.join(sessionsDir(path.join(root, node.path)), `${s.sessionId}.json`), { force: true });
+  dropSession(path.join(root, node.path), s.sessionId);
   return { tmux: launch(root, node.path, { resumeId: s.sessionId, cwd: s.cwd }), path: node.path };
 }
 
+// A live session on this machine, by session id or tmux name.
+function findSession(root: string, id: string) {
+  for (const node of flatten(readTree(root))) {
+    const s = node.sessions.find((x) => x.sessionId === id || x.tmux === id);
+    if (s) return { node, s };
+  }
+  throw new EditError(`no live session ${id}`);
+}
+
 function setGoal(body: string, goal: string): string {
-  const section = /^##\s+Goal\s*$[\s\S]*?(?=^#{1,6}\s|(?![\s\S]))/im;
   const block = goal ? `## Goal\n${goal}\n\n` : "";
-  if (section.test(body)) return body.replace(section, block);
+  if (GOAL_SECTION.test(body)) return body.replace(GOAL_SECTION, block);
   if (!goal) return body;
   // New section goes before the first heading, or at the end if there is none.
   const first = body.search(/^#{1,6}\s/m);

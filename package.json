@@ -27,6 +27,7 @@
   "scripts": {
     "start": "node bin/orca-server.js",
     "test": "node --test test/*.test.ts",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-exclude=test/** test/*.test.ts",
     "typecheck": "tsc",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
     "build": "tsc -p tsconfig.build.json",

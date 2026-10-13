@@ -1,11 +1,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { hooksInstalled } from "./install.ts";
 import { parseNode } from "./node.ts";
 import { expandHome, resolveInRoot } from "./paths.ts";
-import { hooksInstalled as sharedHooksInstalled, isAlive, mergeHooks } from "../remote/state.mjs";
+import { isAlive } from "../remote/state.mjs";
 
 // working: Claude is running. needs-input: blocked on a permission or question. ready: turn finished.
 export type SessionState = "working" | "needs-input" | "ready";
@@ -23,18 +22,6 @@ export type Session = {
   updatedAt: string;
 };
 
-const HOOK = fileURLToPath(new URL("../../bin/orca-hook.js", import.meta.url));
-export const USER_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
-const SKILL_SRC = fileURLToPath(new URL("../../templates/skill/SKILL.md", import.meta.url));
-export const USER_SKILL = path.join(os.homedir(), ".claude", "skills", "orca", "SKILL.md");
-
-// The /orca skill lets a session anywhere register itself with `orca claim`.
-export function installSkill(file = USER_SKILL, remove = false) {
-  if (remove) return fs.rmSync(path.dirname(file), { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.copyFileSync(SKILL_SRC, file);
-}
-
 // A repo entry is a local path, or "<worker>:<path>" for a path on a worker.
 export function splitRepo(repo: string): { host?: string; path: string } {
   const m = repo.match(/^([A-Za-z0-9_.-]+):(.+)$/);
@@ -42,6 +29,9 @@ export function splitRepo(repo: string): { host?: string; path: string } {
 }
 
 export const sessionsDir = (nodeDir: string) => path.join(nodeDir, ".node", "sessions");
+// Deletes a session's state file, so the node stops showing it.
+export const dropSession = (nodeDir: string, sessionId: string) =>
+  fs.rmSync(path.join(sessionsDir(nodeDir), `${sessionId}.json`), { force: true });
 // The node's latest conversation and the folder it ran in. It outlives the session, so Resume can find it.
 export const lastSessionFile = (nodeDir: string) => path.join(nodeDir, ".node", "last.json");
 
@@ -77,29 +67,6 @@ export function readSessions(nodeDir: string): Session[] {
     else fs.rmSync(file, { force: true });
   }
   return sessions.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
-}
-
-// ---- Hook install ----
-
-function hookCommand(event: string): string {
-  // The node on PATH, not process.execPath: Homebrew's versioned path breaks on upgrade.
-  const node = execFileSync("sh", ["-c", "command -v node"], { encoding: "utf8" }).trim();
-  const env = process.env.NODES_ROOT ? `NODES_ROOT="${process.env.NODES_ROOT}" ` : "";
-  return `${env}"${node}" "${HOOK}" ${event}`;
-}
-
-function readSettings(file: string) {
-  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
-}
-
-export const hooksInstalled = (file = USER_SETTINGS): boolean => sharedHooksInstalled(readSettings(file));
-
-// Adds (or with remove, deletes) orca's hook groups in a Claude settings file. Other hooks are untouched.
-export function installHooks(file = USER_SETTINGS, remove = false) {
-  const settings = mergeHooks(readSettings(file), hookCommand, remove);
-  if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.orca-backup`);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
 }
 
 // ---- Launch ----
