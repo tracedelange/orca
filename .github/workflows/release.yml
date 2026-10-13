@@ -1,0 +1,32 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write # npm trusted publishing
+
+jobs:
+  release:
+    # macOS, because the package is darwin-only and node-pty builds natively.
+    runs-on: macos-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+      - if: ${{ steps.release.outputs.release_created }}
+        uses: actions/checkout@v4
+      - if: ${{ steps.release.outputs.release_created }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm install -g npm@latest
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm ci && npm test
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm publish
