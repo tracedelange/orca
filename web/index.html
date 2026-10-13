@@ -93,11 +93,37 @@
     </form>
   </dialog>
 
-  <!-- Settings: from the header. Saved in this browser. -->
+  <!-- Settings: from the header. General is saved in this browser; integrations on the server. -->
   <dialog id="settingsdlg">
     <form class="form" method="dialog">
-      <label><span>Group nodes idle for longer than (minutes)</span><input name="idle" type="number" min="1" required></label>
-      <div class="row"><button type="submit" value="save">Save</button><button type="submit" value="" formnovalidate>Cancel</button></div>
+      <h2>Settings</h2>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="general">General</button>
+        <button type="button" role="tab" data-tab="integrations">Integrations</button>
+      </nav>
+      <section class="pane" data-pane="general">
+        <div class="setting">
+          <div><b>Group idle nodes</b><p>Children quiet for longer than this share one "others" node on the map. Saved in this browser.</p></div>
+          <label class="inline"><input name="idle" type="number" min="1" required><span>min</span></label>
+        </div>
+      </section>
+      <section class="pane" data-pane="integrations" hidden>
+        <div class="card">
+          <div class="setting">
+            <div><b>Obsidian</b><p class="obs-note"></p></div>
+            <label class="switch" title="Copy documents to Obsidian"><input name="obsidian" type="checkbox"><i></i></label>
+          </div>
+          <div class="fields">
+            <label><span>Vault</span><select name="vault"></select></label>
+            <label><span>Folder</span><input name="folder" type="text" placeholder="unfiled"></label>
+          </div>
+        </div>
+      </section>
+      <div class="foot">
+        <p class="err" hidden></p>
+        <button type="submit" value="" formnovalidate>Cancel</button>
+        <button type="submit" value="save" class="on">Save</button>
+      </div>
     </form>
   </dialog>
 
@@ -108,7 +134,7 @@
     <div class="split">
       <div id="term"></div>
       <article id="doc" hidden>
-        <div class="top"><code class="where"></code><button class="close" type="button">Close</button></div>
+        <div class="top"><code class="where"></code><span><button class="copyobs" type="button" hidden>Copy to Obsidian</button> <button class="popout" type="button">Open in app</button> <button class="close" type="button">Close</button></span></div>
         <div class="md"></div>
       </article>
     </div>

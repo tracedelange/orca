@@ -44,19 +44,34 @@ export function readNodeDetail(root: string, rel: string) {
     file: path.join(dir, "CLAUDE.md"),
     ...fields,
     sessions: readSessions(dir),
+    docs: listDocs(dir),
     body,
     html: toHtml(body),
   };
 }
 
-// A markdown file anywhere in the tree or in a node's local repo, rendered. A relative path
-// resolves against `cwd`, the folder of the session that printed it.
-export function readDoc(root: string, file: string, cwd = root) {
+// The markdown files in the node's docs/ folder, newest first.
+function listDocs(dir: string) {
+  const docs = path.join(dir, "docs");
+  if (!fs.existsSync(docs)) return [];
+  return fs.readdirSync(docs).filter((name) => name.endsWith(".md"))
+    .map((name) => ({ name, file: path.join(docs, name), modified: fs.statSync(path.join(docs, name)).mtime.toISOString() }))
+    .sort((a, b) => b.modified.localeCompare(a.modified));
+}
+
+// The real path of a markdown file in the tree or in a node's local repo; anything else throws.
+// A relative path resolves against `cwd`, the folder of the session that printed it.
+export function docPath(root: string, file: string, cwd = root): string {
   const abs = fs.realpathSync(path.resolve(expandHome(cwd), expandHome(file)));
   if (!abs.endsWith(".md")) throw new PathError(`not a markdown file: ${file}`);
   const repos = flatten(readTree(root)).flatMap((n) => n.repos.filter((r) => !splitRepo(r).host));
   const allowed = [root, ...repos].map(expandHome).filter((d) => fs.existsSync(d)).map((d) => fs.realpathSync(d));
   if (!allowed.some((d) => isInside(d, abs))) throw new PathError(`outside the node tree and its repos: ${file}`);
+  return abs;
+}
+
+export function readDoc(root: string, file: string, cwd?: string) {
+  const abs = docPath(root, file, cwd);
   return { path: abs, html: toHtml(fs.readFileSync(abs, "utf8")) };
 }
 

@@ -94,3 +94,24 @@ test("queue tasks go in a ## Queue section before ## Log, in order", () => {
   assert.deepEqual(queueItems("## Queue\n- [x] Done → work/done\n  Result: ok\n- [!] Broke → work/b — merge conflict\n## Log\n- [ ] not queue"),
     [{ mark: "x", text: "Done", child: "work/done" }, { mark: "!", text: "Broke", child: "work/b" }]);
 });
+
+test("obsidian copy needs a known vault, stays inside it and never overwrites", async () => {
+  const { copyToObsidian, readObsidian, setObsidian } = await import("../src/core/obsidian.ts");
+  const root = seededRoot();
+  const vault = fs.mkdtempSync(path.join(os.tmpdir(), "orca-vault-"));
+  const doc = path.join(root, "work", "plan.md");
+  fs.writeFileSync(doc, "# Plan");
+
+  assert.throws(() => copyToObsidian(root, doc), EditError);
+  assert.throws(() => setObsidian(root, "/not/a/vault", "unfiled", [vault]), EditError);
+  assert.throws(() => setObsidian(root, vault, "../outside", [vault]), EditError);
+  setObsidian(root, vault, " unfiled ", [vault]);
+  assert.deepEqual(readObsidian(root), { vault, folder: "unfiled" });
+
+  assert.equal(copyToObsidian(root, doc), path.join(vault, "unfiled", "plan.md"));
+  assert.equal(copyToObsidian(root, doc), path.join(vault, "unfiled", "plan-2.md"));
+  assert.equal(fs.readFileSync(path.join(vault, "unfiled", "plan-2.md"), "utf8"), "# Plan");
+
+  setObsidian(root, "", "", [vault]);
+  assert.equal(readObsidian(root), undefined);
+});

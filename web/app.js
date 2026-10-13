@@ -29,13 +29,14 @@ let workerList = [];  // [{ host, name, error }] from /api/workers
 const isOpen = (s, t = term) => !!t && s.tmux === t.name && (s.host ?? null) === (t.host ?? null);
 const termview = document.getElementById("termview");
 let panelNode = null; // last node rendered in the panel
-let editing = false;  // a form is open in the panel; polling must not redraw it
+let editing = false;  // a form or document is open in the panel; polling must not redraw it
 const rail = document.getElementById("rail");
 let seen = {}; // sessionId -> finishedAt of the last result you looked at; the server keeps it for every device
 let seenText = "";
 let jobs = []; // dispatches still being placed, or failed: [{ id, prompt, host, startedAt, error }]
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
+let obsidian = null; // { vault, folder } once the user opts in to copying documents there
 let idleMinutes = 30; // children quiet for longer than this share one "others" node
 try { idleMinutes = Number(localStorage.getItem("orca.idleMinutes")) || 30; } catch {}
 const opened = new Set(); // parents whose "others" node was clicked; packing the parent groups them again
@@ -710,6 +711,7 @@ function renderPanel(n) {
     </div>
     <form class="form" hidden></form>
     ${renderSessions(n.sessions)}
+    ${renderDocs(n.docs)}
     ${n.issues.length ? `<ul class="issues">${n.issues.map((i) => `<li>${esc(i.level)}: ${esc(i.message)}</li>`).join("")}</ul>` : ""}
     <div class="md">${n.html}</div>`;
   // The goal already shows under the title; drop its body section.
@@ -736,6 +738,22 @@ function renderSessions(sessions) {
   </section>`;
 }
 
+function renderDocs(docs) {
+  if (!docs.length) return "";
+  const items = docs.map((d) => `<li><button class="doc" type="button" data-doc="${esc(d.file)}">${esc(d.name)}</button><time>${ago(d.modified)}</time></li>`);
+  return `<section class="docs"><div class="sec-head"><span>Docs</span></div><ul>${items.join("")}</ul></section>`;
+}
+
+// Shows a document in place of the node's details, until Back.
+async function readInPanel(file) {
+  editing = true;
+  const d = await fetchDoc(file);
+  panel.innerHTML = `
+    <div class="top"><button class="back" type="button">← ${esc(panelNode.title)}</button><span>${obsidian ? `<button type="button" data-copyobs="${esc(d.path)}">Copy to Obsidian</button> ` : ""}<button class="popout" type="button" data-popout="${esc(d.path)}">Open in app</button> <button class="close" type="button">Close</button></span></div>
+    <p class="kicker">${esc(d.path)}</p>
+    <div class="md">${d.html}</div>`;
+  panel.scrollTop = 0;
+}
 
 function ago(iso) {
   const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
@@ -1021,18 +1039,55 @@ paletteList.addEventListener("click", (e) => {
 });
 palette.addEventListener("click", (e) => e.target === palette && palette.close()); // the backdrop
 
-// Settings are per browser.
+// General settings are per browser. Integrations live on the server, which does the copying.
 const settings = document.getElementById("settingsdlg");
-document.getElementById("settings").addEventListener("click", () => {
-  settings.querySelector("[name=idle]").value = idleMinutes;
+const setting = (name) => settings.querySelector(`[name=${name}]`);
+const settingsErr = settings.querySelector(".err");
+const loadObsidian = () => fetch("/api/obsidian").then((r) => r.json());
+loadObsidian().then((o) => (obsidian = o.obsidian)).catch(() => {});
+
+function showTab(name) {
+  for (const t of settings.querySelectorAll("[data-tab]")) t.setAttribute("aria-selected", t.dataset.tab === name);
+  for (const p of settings.querySelectorAll("[data-pane]")) p.hidden = p.dataset.pane !== name;
+}
+settings.querySelector(".tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest("[data-tab]");
+  if (tab) showTab(tab.dataset.tab);
+});
+const showObsidianFields = () => (settings.querySelector(".fields").hidden = !setting("obsidian").checked);
+setting("obsidian").addEventListener("change", showObsidianFields);
+
+document.getElementById("settings").addEventListener("click", async () => {
+  setting("idle").value = idleMinutes;
+  const o = await loadObsidian();
+  const name = (p) => p.split("/").pop();
+  setting("vault").innerHTML = o.vaults.map((v) => `<option value="${esc(v)}"${v === o.obsidian?.vault ? " selected" : ""}>${esc(name(v))}</option>`).join("");
+  setting("folder").value = o.obsidian?.folder ?? "unfiled";
+  setting("obsidian").checked = !!o.obsidian;
+  setting("obsidian").disabled = !o.vaults.length;
+  settings.querySelector(".obs-note").textContent = o.vaults.length
+    ? "Adds a Copy to Obsidian button to documents. Copies are snapshots, saved in one folder of a vault."
+    : "No Obsidian vaults found on this Mac.";
+  showObsidianFields();
+  showTab("general");
+  settingsErr.hidden = true;
   settings.returnValue = "";
   settings.showModal();
 });
-settings.addEventListener("close", () => {
+settings.addEventListener("close", async () => {
   if (settings.returnValue !== "save") return;
-  idleMinutes = Number(settings.querySelector("[name=idle]").value);
+  idleMinutes = Number(setting("idle").value);
   try { localStorage.setItem("orca.idleMinutes", idleMinutes); } catch {}
   render();
+  try {
+    const vault = setting("obsidian").checked ? setting("vault").value : "";
+    obsidian = (await post("obsidian", { vault, folder: setting("folder").value })).obsidian;
+  } catch (err) {
+    settingsErr.textContent = err.message;
+    settingsErr.hidden = false;
+    showTab("integrations");
+    settings.showModal(); // stay open so the folder can be fixed
+  }
 });
 dispatchForm.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) dispatchForm.requestSubmit();
@@ -1187,16 +1242,50 @@ function mdLinks(xterm) {
   };
 }
 
-// A relative path resolves against the folder of the session that printed it.
-async function openDoc(file) {
-  const cwd = sessionsIn(tree).find((s) => isOpen(s))?.cwd ?? "";
+// A relative path resolves against `cwd`. An error comes back as the document's text.
+async function fetchDoc(file, cwd = "") {
   const res = await fetch(`/api/file?path=${encodeURIComponent(file)}&cwd=${encodeURIComponent(cwd)}`);
   const d = await res.json();
-  docview.querySelector(".where").textContent = d.path ?? file;
-  docview.querySelector(".md").innerHTML = res.ok ? d.html : `<p>${esc(d.error)}</p>`;
+  return res.ok ? d : { path: file, html: `<p>${esc(d.error)}</p>` };
+}
+
+// Relative paths in the terminal belong to the folder of the session that printed them.
+async function openDoc(file) {
+  const d = await fetchDoc(file, sessionsIn(tree).find((s) => isOpen(s))?.cwd);
+  docview.querySelector(".where").textContent = d.path;
+  docview.querySelector(".copied")?.remove();
+  docview.querySelector(".copyobs").hidden = !obsidian;
+  docview.querySelector(".copyobs").textContent = "Copy to Obsidian";
+  docview.querySelector(".md").innerHTML = d.html;
   docview.hidden = false;
   docview.scrollTop = 0;
 }
+
+// Opens the file on the Mac that runs the server, in the default app for .md files.
+function popout(button, file) {
+  post("open", { path: file }).catch((err) => {
+    button.textContent = "Can't open";
+    button.title = err.message;
+  });
+}
+
+// Copies the file into the chosen vault folder. The button gives way to where it went and a link
+// that opens the copy in Obsidian, so a second click cannot make a duplicate.
+function copyToObsidian(button, file) {
+  post("copy", { path: file }).then(
+    (r) => {
+      const done = document.createElement("span");
+      done.className = "copied";
+      done.innerHTML = `Copied to ${esc(r.copied.slice(obsidian.vault.length + 1))} <a class="button" href="obsidian://open?path=${encodeURIComponent(r.copied)}">Open in Obsidian</a>`;
+      button.hidden = true;
+      button.after(done);
+    },
+    (err) => ((button.textContent = "Can't copy"), (button.title = err.message)),
+  );
+}
+
+docview.querySelector(".copyobs").addEventListener("click", (e) => copyToObsidian(e.target, docview.querySelector(".where").textContent));
+docview.querySelector(".popout").addEventListener("click", (e) => popout(e.target, docview.querySelector(".where").textContent));
 
 docview.querySelector(".close").addEventListener("click", () => {
   docview.hidden = true;
@@ -1206,6 +1295,17 @@ docview.querySelector(".close").addEventListener("click", () => {
 panel.addEventListener("click", (e) => {
   if (e.target.closest(".close")) closePanel();
   if (e.target.closest(".cancel")) closeForm();
+  const obs = e.target.closest("[data-copyobs]");
+  if (obs) copyToObsidian(obs, obs.dataset.copyobs);
+  const pop = e.target.closest("[data-popout]");
+  if (pop) popout(pop, pop.dataset.popout);
+  const doc = e.target.closest("[data-doc]");
+  if (doc) readInPanel(doc.dataset.doc);
+  if (e.target.closest(".back")) {
+    editing = false;
+    panelText = "";
+    refreshPanel();
+  }
   const open = e.target.closest("[data-form]");
   if (open) openForm(open.dataset.form);
   if (e.target.closest(".launch")) launchSession(false);

@@ -63,6 +63,15 @@ test("GET /api/file renders markdown in the tree and node repos, and nothing els
   assert.equal((await get(path.join(docs, "link.md"))).status, 400);
   assert.equal((await get(path.join(docs, "notes.txt"))).status, 400);
   assert.equal((await get(path.join(docs, "missing.md"))).status, 404);
+  // Only check refusals: a successful open would launch an app.
+  const open = (p: string) => fetch(`${base}/api/nodes/open`, { method: "POST", body: JSON.stringify({ path: p }), headers: { origin: base } });
+  assert.equal((await open(path.join(outside, "secret.md"))).status, 400);
+  assert.equal((await open(path.join(docs, "notes.txt"))).status, 400);
+  // No vault is set in the test root, so a copy is refused before anything is written.
+  const copy = await fetch(`${base}/api/nodes/copy`, { method: "POST", body: JSON.stringify({ path: path.join(docs, "plan.md") }), headers: { origin: base } });
+  assert.equal(copy.status, 409);
+  const node = await (await fetch(`${base}/api/node?path=work/vmt-analyzer`)).json();
+  assert.deepEqual(node.docs.map((d: any) => d.name).sort(), ["link.md", "plan.md"]);
   fs.rmSync(path.join(root, "work", "repo-node"), { recursive: true });
 });
 

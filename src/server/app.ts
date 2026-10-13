@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
@@ -6,11 +7,12 @@ import { WebSocketServer } from "ws";
 import { dismissDispatch, listJobs, queueDispatch, retryDispatch } from "../core/dispatch.ts";
 import { adoptSession, createNode, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
+import { copyToObsidian, listVaults, readObsidian, setObsidian } from "../core/obsidian.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
 import { liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readSeen } from "../core/seen.ts";
 import { readUsage } from "../core/usage.ts";
-import { attachWorkerSessions, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
+import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type WorkerState } from "../core/workers.ts";
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -54,6 +56,10 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   retry: (root, b) => (retryDispatch(root, String(b.id ?? "")), {}),
   dismiss: (root, b) => (dismissDispatch(String(b.id ?? "")), {}),
   queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
+  // Opens a document in the Mac's default app for its type.
+  open: (root, b) => (execFileSync("open", [docPath(root, String(b.path ?? ""))]), {}),
+  copy: (root, b) => ({ copied: copyToObsidian(root, docPath(root, String(b.path ?? ""))) }),
+  obsidian: (root, b) => ({ obsidian: setObsidian(root, String(b.vault ?? ""), String(b.folder ?? "")) ?? null }),
   seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),
 };
 const liveSessionIds = (root: string) =>
@@ -77,6 +83,7 @@ export function createServer(root: string) {
     try {
       if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
       if (url.pathname === "/api/seen") return json(res, 200, readSeen(root));
+      if (url.pathname === "/api/obsidian") return json(res, 200, { vaults: listVaults(), obsidian: readObsidian(root) ?? null });
       if (url.pathname === "/api/dispatches") return json(res, 200, listJobs());
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
