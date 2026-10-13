@@ -123,6 +123,8 @@ test("hook writes state for a session whose cwd is in a repo, and nothing otherw
 
   hook("SessionEnd", { session_id: "s1", cwd: repo });
   assert.ok(!fs.existsSync(path.join(vmt, ".node", "sessions", "s1.json")));
+  // The last conversation outlives the session, so Resume can reopen it in the repo.
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(vmt, ".node", "last.json"), "utf8")), { sessionId: "s1", cwd: repo });
   hook("UserPromptSubmit", { session_id: "s2", cwd: os.tmpdir() });
   assert.deepEqual(flatten(readTree(root)).flatMap((n) => n.sessions), []);
 });

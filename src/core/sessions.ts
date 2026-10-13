@@ -42,6 +42,17 @@ export function splitRepo(repo: string): { host?: string; path: string } {
 }
 
 export const sessionsDir = (nodeDir: string) => path.join(nodeDir, ".node", "sessions");
+// The node's latest conversation and the folder it ran in. It outlives the session, so Resume can find it.
+export const lastSessionFile = (nodeDir: string) => path.join(nodeDir, ".node", "last.json");
+
+function readLastSession(nodeDir: string): { sessionId: string; cwd: string } | undefined {
+  try {
+    const last = JSON.parse(fs.readFileSync(lastSessionFile(nodeDir), "utf8"));
+    return fs.existsSync(last.cwd) ? last : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function liveTmuxSessions(): Set<string> {
   try {
@@ -110,6 +121,10 @@ export function launch(root: string, rel: string, opts: LaunchOptions = {}): str
   const dir = resolveInRoot(root, rel);
   if (!hooksInstalled()) throw new Error('orca hooks are not installed; run "orca install-hooks"');
   const node = parseNode(fs.readFileSync(path.join(dir, "CLAUDE.md"), "utf8"), path.basename(dir));
+  // --continue finds only conversations that started in the node folder. A claimed session runs
+  // elsewhere, so reopen the latest conversation by id, in its own folder.
+  const last = opts.resume && !opts.resumeId ? readLastSession(dir) : undefined;
+  if (last) opts = { ...opts, resumeId: last.sessionId, cwd: last.cwd };
 
   const base = tmuxBase(root, dir);
   const live = liveTmuxSessions();

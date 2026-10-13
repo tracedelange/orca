@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { rootDir } from "../core/paths.ts";
-import { sessionsDir, type Session } from "../core/sessions.ts";
+import { lastSessionFile, sessionsDir, type Session } from "../core/sessions.ts";
 import { claimedNodeDir, hasClaims } from "../core/claims.ts";
 import { findClaudePid, nextSession } from "../remote/state.mjs";
 import { findNodeDir, nodeContext } from "../core/tree.ts";
@@ -43,4 +43,5 @@ function run(input: { session_id?: string; cwd?: string; notification_type?: str
   const session: Session = nextSession(prev, event, input, { pid });
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, JSON.stringify(session, null, 2));
+  fs.writeFileSync(lastSessionFile(nodeDir), JSON.stringify({ sessionId: input.session_id, cwd }));
 }
