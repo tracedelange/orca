@@ -360,15 +360,23 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
 :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
 :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .err[hidden] { display: none; }
-:is(#dispatcher, #ender, #keyhelp, #settingsdlg) {
+:is(#dispatcher, #ender, #keyhelp, #settingsdlg, #palette) {
   width: min(560px, calc(100vw - 32px));
   padding: 0;
   border: 1px solid var(--ink-3);
   background: var(--paper-2);
   color: var(--ink);
 }
-:is(#dispatcher, #ender, #keyhelp, #settingsdlg)::backdrop { background: rgb(0 0 0 / 0.3); }
+:is(#dispatcher, #ender, #keyhelp, #settingsdlg, #palette)::backdrop { background: rgb(0 0 0 / 0.3); }
 :is(#dispatcher, #ender, #keyhelp, #settingsdlg) .form { border: none; margin: 0; padding: 20px; }
+#palette { margin-top: 12vh; }
+#palette input { width: 100%; box-sizing: border-box; padding: 14px 16px; border: none; border-bottom: 1px solid var(--ink-3); background: transparent; color: var(--ink); font: 15px var(--sans); outline: none; }
+#palette ol { list-style: none; margin: 0; padding: 4px 0; max-height: 50vh; overflow-y: auto; }
+#palette li { display: flex; gap: 10px; align-items: baseline; padding: 7px 16px; cursor: pointer; font: 14px var(--sans); }
+#palette li.on { background: var(--paper); }
+#palette li .path { flex: 1; color: var(--ink-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#palette li .st { color: var(--ink-2); font-size: 12px; }
+#palette li.none { color: var(--ink-3); cursor: default; }
 #keyhelp table { border-collapse: collapse; font: 14px var(--serif); }
 #keyhelp th { font: 500 12px var(--sans); text-align: left; color: var(--ink-2); padding: 4px 18px 4px 0; white-space: nowrap; }
 #keyhelp td { padding: 4px 0; }

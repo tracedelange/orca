@@ -925,6 +925,102 @@ ender.addEventListener("close", () => ender.returnValue === "end" && end(ender.d
 const keyhelp = document.getElementById("keyhelp");
 document.getElementById("keys").addEventListener("click", () => keyhelp.showModal());
 
+// ---- Palette: ⇧⌘P finds any node by name and resumes it. A ">" prefix lists commands instead. ----
+
+const palette = document.getElementById("palette");
+const paletteInput = palette.querySelector("input");
+const paletteList = palette.querySelector("ol");
+const COMMANDS = []; // { name, run }
+let paletteItems = [];
+let paletteAt = 0;
+
+function openPalette() {
+  if (palette.open || !tree) return;
+  paletteInput.value = "";
+  renderPalette();
+  palette.showModal();
+}
+
+// Lower is better: title prefix, title substring, path substring, then the letters in order anywhere. -1 is no match.
+function rank(q, d) {
+  const title = d.data.title.toLowerCase();
+  const path = d.data.path.toLowerCase();
+  if (title.includes(q)) return title.startsWith(q) ? 0 : 1;
+  if (path.includes(q)) return 2;
+  const text = `${title} ${path}`;
+  let at = -1;
+  for (const c of q) if ((at = text.indexOf(c, at + 1)) < 0) return -1;
+  return 3;
+}
+
+function renderPalette() {
+  const q = paletteInput.value.trim().toLowerCase();
+  const commands = q.startsWith(">");
+  if (commands) {
+    const c = q.slice(1).trim();
+    paletteItems = COMMANDS.filter((x) => x.name.toLowerCase().includes(c)).map((x) => ({ label: x.name, run: x.run }));
+  } else {
+    // With no query, nodes with live sessions come first.
+    paletteItems = tree.descendants()
+      .map((d) => ({ d, r: q ? rank(q, d) : d.data.sessions.length ? 0 : 1 }))
+      .filter((x) => x.r >= 0)
+      .sort((a, b) => a.r - b.r)
+      .map(({ d }) => ({
+        label: d.data.title,
+        path: d.data.path || "/",
+        state: d.data.sessions.length ? mostUrgent(withNode(d)) : null,
+        run: () => resumeNode(d.data.path),
+      }));
+  }
+  paletteAt = 0;
+  paletteList.innerHTML = paletteItems.length
+    ? paletteItems.map((x, i) => `<li data-i="${i}"${i ? "" : ' class="on"'}><span class="name">${esc(x.label)}</span>${x.path ? `<span class="path">${esc(x.path)}</span>` : ""}${x.state ? `<span class="st">${STATE_MARK[x.state]} ${STATE_LABEL[x.state]}</span>` : ""}</li>`).join("")
+    : `<li class="none">${commands ? "No commands yet" : "No matching nodes"}</li>`;
+}
+
+function movePalette(step) {
+  const rows = paletteList.querySelectorAll("li[data-i]");
+  if (!rows.length) return;
+  rows[paletteAt].classList.remove("on");
+  paletteAt = (paletteAt + step + rows.length) % rows.length;
+  rows[paletteAt].classList.add("on");
+  rows[paletteAt].scrollIntoView({ block: "nearest" });
+}
+
+function pickPalette(i) {
+  const item = paletteItems[i];
+  if (!item) return;
+  palette.close();
+  item.run();
+}
+
+// Opens the node's live terminal if it has one; otherwise resumes its last conversation, as the panel's Resume does.
+async function resumeNode(path) {
+  const s = withNode(byPath.get(path)).filter((x) => x.tmux).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  if (s && term) return openTerminal(s.tmux, path, s.host);
+  reveal(path);
+  await select(path);
+  if (s) openTerminal(s.tmux, path, s.host);
+  else launchSession(true);
+}
+
+paletteInput.addEventListener("input", renderPalette);
+paletteInput.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    movePalette(e.key === "ArrowDown" ? 1 : -1);
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    pickPalette(paletteAt);
+  }
+});
+paletteList.addEventListener("click", (e) => {
+  const li = e.target.closest("li[data-i]");
+  if (li) pickPalette(Number(li.dataset.i));
+});
+palette.addEventListener("click", (e) => e.target === palette && palette.close()); // the backdrop
+
 // Settings are per browser.
 const settings = document.getElementById("settingsdlg");
 document.getElementById("settings").addEventListener("click", () => {
@@ -987,7 +1083,12 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
     // ⌥Q types œ on a Mac, so match the physical key.
-    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k")) || (e.altKey && (e.key === "Tab" || e.code === "KeyQ"))) e.stopPropagation();
+    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k" || e.code === "KeyP")) || (e.altKey && (e.key === "Tab" || e.code === "KeyQ"))) e.stopPropagation();
+    if (e.code === "KeyP" && e.metaKey && e.shiftKey) {
+      e.preventDefault();
+      if (e.type === "keydown") openPalette();
+      return false;
+    }
     if (e.code === "KeyQ" && e.altKey) {
       e.preventDefault();
       if (e.type === "keydown") confirmEnd();
@@ -1127,7 +1228,11 @@ addEventListener("keydown", (e) => {
     e.preventDefault();
     return openDispatch();
   }
-  if (dispatcher.open || ender.open || keyhelp.open || settings.open) return; // the dialogs handle their own Escape
+  if (e.code === "KeyP" && e.metaKey && e.shiftKey) {
+    e.preventDefault();
+    return openPalette();
+  }
+  if (dispatcher.open || ender.open || keyhelp.open || settings.open || palette.open) return; // the dialogs handle their own Escape
   if (e.code === "KeyQ" && e.altKey) {
     e.preventDefault();
     return confirmEnd();

@@ -60,6 +60,12 @@
     </form>
   </dialog>
 
+  <!-- Palette: ⇧⌘P from anywhere. Finds a node by name and resumes it; ">" switches to commands. -->
+  <dialog id="palette">
+    <input type="text" spellcheck="false" autocomplete="off" placeholder="Find a node · > for commands">
+    <ol></ol>
+  </dialog>
+
   <!-- End: ⌥Q ends the current rail session, after Enter. -->
   <dialog id="ender">
     <form class="form" method="dialog">
@@ -73,6 +79,7 @@
     <form class="form" method="dialog">
       <table>
         <tr><th>⌘K</th><td>Dispatch a task, from anywhere</td></tr>
+        <tr><th>⇧⌘P</th><td>Find and resume a node; type &gt; for commands</td></tr>
         <tr><th>/</th><td>Dispatch a task, on the map</td></tr>
         <tr><th>f</th><td>Fit the map to the screen</td></tr>
         <tr><th>⌘.</th><td>Toggle between the map and the last terminal</td></tr>
