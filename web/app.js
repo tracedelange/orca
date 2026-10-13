@@ -882,7 +882,6 @@ panel.addEventListener("submit", (e) => {
 
 // Terminal mode is the detailed view; the map is the default. Esc always leads back to the map.
 async function openTerminal(name, path = selected ?? graphRoot.data.path, host = undefined) {
-  await document.fonts.load("13px 'Azeret Mono'");
   if (term) stopTerminal();
   document.body.classList.add("mode-term");
   termview.hidden = false;
@@ -891,7 +890,7 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   relayout(0);
 
   const xterm = new Terminal({
-    fontFamily: "'Azeret Mono', monospace",
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
     fontSize: 13,
     cursorBlink: true,
     theme: termTheme(),

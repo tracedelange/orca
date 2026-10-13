@@ -287,7 +287,7 @@ A result stays new until the person opens the terminal of that session. The brow
 
 **Refresh.** The viewer polls `/api/tree` every 5 seconds. It updates in place and keeps the root, the unpacked nodes, the panel, and the open terminal.
 
-**Theme.** Ink on paper in light mode, chalk on slate in dark mode, through `prefers-color-scheme`. Titles use Brygada 1918 and metadata uses Azeret Mono, from Google Fonts. There are no italics. The viewer is for laptop screens.
+**Theme.** Ink on paper in light mode, chalk on slate in dark mode. The header toggle selects system, light or dark. System follows `prefers-color-scheme`. Titles use Brygada 1918 and metadata uses Inter, from Google Fonts. The terminal and code blocks use the system monospace font. There are no italics. The viewer is for laptop screens.
 
 ### 4. Dispatch
 
