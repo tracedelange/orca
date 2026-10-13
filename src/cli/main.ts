@@ -8,15 +8,13 @@ import { rootDir } from "../core/paths.ts";
 import { addToQueue, queueItems } from "../core/queue.ts";
 import { claim, findClaudePid } from "../core/claims.ts";
 import { place } from "../core/dispatch.ts";
-import { installHooks, installSkill, sessionsDir, USER_SETTINGS, USER_SKILL } from "../core/sessions.ts";
+import { hooksInstalled, installHooks, installSkill, sessionsDir, USER_SETTINGS, USER_SKILL } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
 import { flatten, nodeContext, readTree, type TreeNode } from "../core/tree.ts";
 import { daemon } from "./daemon.ts";
 
 const root = rootDir();
 const TEMPLATES = fileURLToPath(new URL("../../templates/", import.meta.url));
-// The "sv" locale formats dates as YYYY-MM-DD in local time.
-const today = new Date().toLocaleDateString("sv");
 const MARKS: Record<string, string> = { "needs-input": "◆", working: "●", ready: "○" };
 
 const commands: Record<string, (args: string[]) => void | Promise<void>> = {
@@ -29,11 +27,15 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   worker,
   queue,
   ...daemon,
+  up,
+  down: daemon.stop,
+  status,
+  uninstall,
   help: () => console.log(HELP),
 };
 const HELP = `usage: orca <command>
 
-server:  start | stop | restart | status | open | logs
+server:  up | down | status | restart | open | logs | uninstall
 nodes:   new | mv | rm | set | tree | check | init | queue
 claude:  launch | dispatch | end | claim | adopt | worker | install-hooks`;
 const [cmd = "help", ...args] = process.argv.slice(2);
@@ -213,18 +215,29 @@ function check() {
 
 function init() {
   if (fs.existsSync(root)) throw new Error(`${root} already exists`);
-  copySeed(path.join(TEMPLATES, "seed"), root);
+  fs.mkdirSync(root, { recursive: true });
+  fs.copyFileSync(path.join(TEMPLATES, "root.md"), path.join(root, "CLAUDE.md"));
   console.log(`created ${root}`);
 }
 
-function copySeed(from: string, to: string) {
-  fs.mkdirSync(to, { recursive: true });
-  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
-    const src = path.join(from, e.name);
-    const dst = path.join(to, e.name);
-    if (e.isDirectory()) copySeed(src, dst);
-    else fs.writeFileSync(dst, fs.readFileSync(src, "utf8").replaceAll("{{date}}", today));
-  }
+// Safe to run again. A rerun also rewrites the hook path, which moves when the Node version changes.
+function up() {
+  hooks([]);
+  if (!fs.existsSync(path.join(root, "CLAUDE.md"))) init();
+  daemon.start();
+}
+
+async function status() {
+  await daemon.status();
+  console.log(`hooks: ${hooksInstalled() ? "installed" : "not installed"}`);
+  console.log(`root: ${root}`);
+}
+
+// Never deletes the node tree: it holds the user's notes.
+function uninstall() {
+  daemon.stop();
+  hooks(["--remove"]);
+  console.log(`your nodes are still at ${root}. Delete that folder if you no longer want them.`);
 }
 
 function requireRoot() {

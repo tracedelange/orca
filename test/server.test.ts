@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,7 +8,7 @@ import { after, before, test } from "node:test";
 import { createServer } from "../src/server/app.ts";
 
 const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");
-execFileSync(path.resolve(import.meta.dirname, "../bin/orca.js"), ["init"], { env: { ...process.env, NODES_ROOT: root } });
+fs.cpSync(path.resolve(import.meta.dirname, "seed"), root, { recursive: true });
 const server = createServer(root);
 let base = "";
 

@@ -1,6 +1,9 @@
 ---
-title: Home
+title: Meloria
 ---
+
+## Goal
+(placeholder) Get the first playable build in front of five people
 
 ## Context
 (placeholder) What this node is and why it exists.
@@ -9,4 +12,4 @@ title: Home
 (placeholder) Decisions, constraints and open questions.
 
 ## Log
-- {{date}}: Node created.
+- 2026-01-01: Node created.

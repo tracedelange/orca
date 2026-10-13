@@ -1,9 +1,6 @@
 ---
-title: Example project
+title: Personal
 ---
-
-## Goal
-(placeholder) Decide whether this idea is worth a weekend
 
 ## Context
 (placeholder) What this node is and why it exists.
@@ -12,4 +9,4 @@ title: Example project
 (placeholder) Decisions, constraints and open questions.
 
 ## Log
-- {{date}}: Node created.
+- 2026-01-01: Node created.

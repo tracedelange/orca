@@ -174,10 +174,13 @@ A TypeScript CLI. `npm i -g @tracedelange/orca` (or `npm link` in a checkout) pu
 
 | Command | What it does |
 |---|---|
+| `orca up` | Installs the hook and the `/orca` skill, creates the root if it does not exist, and starts the server. A second run is safe. It also rewrites the hook path after a Node version change. |
+| `orca down` | Unloads the server and removes the plist. `orca stop` is the same command. |
 | `orca start` | Writes `~/Library/LaunchAgents/com.orca.server.plist` and loads it with launchd. The server starts at login and restarts after a crash. |
-| `orca stop` | Unloads the server and removes the plist. |
-| `orca restart` / `status` / `open` / `logs` | Restarts the server, shows its state, opens the viewer, or follows `~/Library/Logs/orca.log`. |
-| `orca init` | Creates the root folder with the root conventions file and the seed tree, if the root does not exist. |
+| `orca status` | Shows the server state, whether the hook is installed, and the root. |
+| `orca uninstall` | Stops the server and removes the plist, the hook, and the `/orca` skill. It does not delete the root, and it shows its path. |
+| `orca restart` / `open` / `logs` | Restarts the server, opens the viewer, or follows `~/Library/Logs/orca.log`. |
+| `orca init` | Creates the root folder with only the root conventions file, if the root does not exist. |
 | `orca new <path> [--title] [--goal]` | Creates a node. Missing parents become nodes with only a title. It does not overwrite a `CLAUDE.md`. |
 | `orca set <path> [--title] [--goal]` | Changes the title or the goal. Other fields, YAML comments, and the body stay. An empty goal removes the `## Goal` section. |
 | `orca mv <from> <to>` | Moves or renames a node with its subtree. The new parent must be a node. |
@@ -203,7 +206,7 @@ The CLI, the server, and the hook use one shared module in `src/core/` for the t
 - It binds to `127.0.0.1` only. The default port is 4317. The environment variable `PORT` changes it.
 - It reads the tree from disk on each request. At tens to low hundreds of nodes, this is fast and has no cache faults.
 - It polls each worker in the background every 5 seconds. A slow or offline worker never delays a request.
-- launchd keeps it running (`orca start`). It starts at login and restarts after a crash. After a server change, `orca restart` loads the new code.
+- launchd keeps it running (`orca up`). It starts at login and restarts after a crash. After a server change, `orca restart` loads the new code.
 
 Endpoints:
 
@@ -320,32 +323,9 @@ Do these steps once for each worker:
 2. On the worker, run `cd ~/orca && claude`.
 3. Trust the folder. Then new node folders under `~/orca` do not stop at the trust prompt.
 
-## Seed tree
+## Root
 
-`orca init` creates this example. The person replaces it with real nodes.
-
-```
-~/nodes/
-  CLAUDE.md                 root conventions
-  work/
-    CLAUDE.md               organizational, no goal
-    vmt-analyzer/
-      CLAUDE.md             project node with a goal and a repo
-  personal/
-    CLAUDE.md               organizational, no goal
-    meloria/
-      CLAUDE.md             project node with a goal
-    side-projects/
-      CLAUDE.md             organizational
-      example-project/
-        CLAUDE.md           leaf with a goal
-  home/
-    CLAUDE.md               organizational
-    household/
-      CLAUDE.md             leaf
-```
-
-The seed files mark their text as `(placeholder)`.
+`orca init` and `orca up` create an empty tree: the root folder with only the root conventions file. The person adds nodes with `orca new` or in the viewer.
 
 To make dispatched sessions start without a prompt, trust the root once: run `cd ~/nodes && claude`, then trust the folder. Trust of the root covers every folder below it.
 
@@ -397,7 +377,7 @@ The manager keeps the conflict retries in memory. A restart of the server sets a
 
 The test suite (`npm test`) and manual tests cover these items:
 
-1. `orca init` creates the seed tree, and `orca check` passes on it.
+1. `orca init` creates a root with no children, and `orca check` passes on it.
 2. A new node from `orca new` or from the viewer shows in the viewer within one poll, without a page reload.
 3. A hand edit of a node file shows in the viewer within one poll.
 4. The viewer draws only the root and the children of unpacked nodes.
@@ -422,7 +402,7 @@ orca/
     server/     HTTP server, API, and terminal bridge
     remote/     plain JavaScript for workers, and the state logic shared with the hub hook
   web/          viewer: HTML, CSS, D3, and xterm code
-  templates/    node template, seed tree, and the /orca skill
+  templates/    node template, root conventions file, and the /orca skill
   test/
   README.md     setup, CLI, workers, and viewer
   design.md     this file
