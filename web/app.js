@@ -629,9 +629,10 @@ function stepRail(back) {
 }
 
 // The trail from the top of the tree to the root. Click a step to make it the root.
+// The tree's own root has no crumb: the logo links back to it.
 function renderCrumbs() {
   crumbs.replaceChildren();
-  graphRoot.ancestors().reverse().forEach((d, i, all) => {
+  graphRoot.ancestors().reverse().slice(1).forEach((d, i, all) => {
     if (i) crumbs.append(Object.assign(document.createElement("span"), { className: "sep", textContent: "/" }));
     const here = i === all.length - 1;
     const el = document.createElement(here ? "span" : "a");

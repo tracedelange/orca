@@ -231,7 +231,7 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
   left: 0;
   bottom: 124px;
   z-index: 2;
-  width: 304px;
+  width: 340px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 12px 0 24px;
@@ -269,7 +269,7 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   display: grid;
   gap: 4px;
   width: 100%;
-  padding: 10px 0 10px 10px;
+  padding: 10px;
   text-align: left;
   text-transform: none;
   letter-spacing: 0;
