@@ -10,7 +10,7 @@ import { addToQueue, runQueues } from "../core/queue.ts";
 import { liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readSeen } from "../core/seen.ts";
 import { readUsage } from "../core/usage.ts";
-import { attachWorkerSessions, flatten, readNodeDetail, readTree } from "../core/tree.ts";
+import { attachWorkerSessions, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type WorkerState } from "../core/workers.ts";
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -81,6 +81,7 @@ export function createServer(root: string) {
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
+      if (url.pathname === "/api/file") return json(res, 200, readDoc(root, url.searchParams.get("path") ?? "", url.searchParams.get("cwd") || undefined));
       if (url.pathname === "/api/launch") {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
         const resume = url.searchParams.get("resume") === "1";
@@ -100,7 +101,7 @@ export function createServer(root: string) {
     } catch (err) {
       if (err instanceof PathError || err instanceof SyntaxError) return json(res, 400, { error: err.message });
       if (err instanceof EditError) return json(res, 409, { error: err.message });
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return json(res, 404, { error: "no such node" });
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return json(res, 404, { error: url.pathname === "/api/file" ? "no such file" : "no such node" });
       json(res, 500, { error: String(err) });
     }
   });

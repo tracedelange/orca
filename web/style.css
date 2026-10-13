@@ -411,7 +411,12 @@ select.where {
   padding: 4px 6px;
 }
 #panel .sessions .none { font: 12px var(--sans); color: var(--ink-3); }
-#term { flex: 1; min-height: 0; }
+#termview .split { flex: 1; min-height: 0; display: flex; gap: 24px; }
+#term { flex: 1; min-width: 0; }
+#doc { flex: 1; min-width: 0; overflow-y: auto; border-left: 1px solid var(--ink-3); padding-left: 24px; }
+#doc[hidden] { display: none; }
+#doc .top { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 8px; background: var(--paper-2); }
+#doc .where { font: 11px var(--mono); color: var(--ink-3); overflow-wrap: anywhere; }
 
 .md { font-size: 16px; line-height: 1.55; }
 .md h1, .md h2, .md h3 {

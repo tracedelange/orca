@@ -25,7 +25,7 @@ orca shows Claude sessions on a map of nodes (folders in `~/nodes`, each with a 
 
 3. The command prints the node it chose and that node's `CLAUDE.md` chain, root first. Read it. It is the context a session started inside the node would load, including the node's goal.
 
-4. Follow the conventions in that output from now on. In particular, end every reply with one line: `Status: <one sentence on where things stand>`.
+4. Follow the conventions in that output from now on. In particular, end every reply with one line: `Status: <one sentence on where things stand>`. Write documents for the user as Markdown in the node's `docs/` folder, and give their full paths.
 
 5. Tell the user, in one line, which node this session is now attached to.
 

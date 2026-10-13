@@ -22,7 +22,7 @@ export function resolveInRoot(root: string, rel: string): string {
   return abs;
 }
 
-function isInside(root: string, p: string): boolean {
+export function isInside(root: string, p: string): boolean {
   const rel = path.relative(root, p);
   return rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel);
 }

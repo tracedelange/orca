@@ -38,6 +38,34 @@ test("GET /api/node rejects paths that escape the root", async () => {
   }
 });
 
+test("GET /api/file renders markdown in the tree and node repos, and nothing else", async () => {
+  const docs = path.join(root, "work", "vmt-analyzer", "docs");
+  fs.mkdirSync(docs, { recursive: true });
+  fs.writeFileSync(path.join(docs, "plan.md"), "# Plan\n\n<img src=x onerror=alert(1)>\n\n[x](javascript:alert(1))\n");
+  fs.writeFileSync(path.join(docs, "notes.txt"), "not markdown");
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "orca-out-"));
+  fs.writeFileSync(path.join(outside, "secret.md"), "# Secret");
+  fs.symlinkSync(path.join(outside, "secret.md"), path.join(docs, "link.md"));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "orca-repo-"));
+  fs.writeFileSync(path.join(repo, "README.md"), "# Repo");
+  fs.mkdirSync(path.join(root, "work", "repo-node"));
+  fs.writeFileSync(path.join(root, "work", "repo-node", "CLAUDE.md"), `---\ntitle: Repo\nrepo: ${repo}\n---\n`);
+  const get = (p: string, cwd?: string) =>
+    fetch(`${base}/api/file?path=${encodeURIComponent(p)}${cwd ? `&cwd=${encodeURIComponent(cwd)}` : ""}`);
+
+  const doc = await (await get(path.join(docs, "plan.md"))).json();
+  assert.match(doc.html, /<h1>Plan<\/h1>/);
+  assert.match(doc.html, /&#60;img/);
+  assert.match(doc.html, /<a href="#">x<\/a>/);
+  assert.equal((await get("docs/plan.md", path.dirname(docs))).status, 200);
+  assert.match((await (await get("README.md", repo)).json()).html, /Repo/);
+  assert.equal((await get(path.join(outside, "secret.md"))).status, 400);
+  assert.equal((await get(path.join(docs, "link.md"))).status, 400);
+  assert.equal((await get(path.join(docs, "notes.txt"))).status, 400);
+  assert.equal((await get(path.join(docs, "missing.md"))).status, 404);
+  fs.rmSync(path.join(root, "work", "repo-node"), { recursive: true });
+});
+
 test("unknown nodes and files are 404", async () => {
   assert.equal((await fetch(`${base}/api/node?path=nope`)).status, 404);
   assert.equal((await fetch(`${base}/../package.json`)).status, 404);

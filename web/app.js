@@ -1080,6 +1080,8 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   xterm.loadAddon(fit);
   const el = document.getElementById("term");
   xterm.open(el);
+  // A worker session's files live on the worker, which the server cannot read.
+  if (!host) xterm.registerLinkProvider(mdLinks(xterm));
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
     // ⌥Q types œ on a Mac, so match the physical key.
@@ -1141,6 +1143,7 @@ function termTheme() {
 }
 
 function stopTerminal() {
+  docview.hidden = true;
   term.ro.disconnect();
   term.ws.close();
   term.xterm.dispose();
@@ -1165,6 +1168,40 @@ function toggleTerminal() {
   if (term) return closeTerminal();
   if (lastTerm && sessionsIn(tree).some((s) => isOpen(s, lastTerm))) openTerminal(lastTerm.name, lastTerm.path, lastTerm.host);
 }
+
+// ---- Documents: a .md path printed in the terminal opens beside it ----
+
+const docview = document.getElementById("doc");
+const MD_PATH = /[\w~./-]*[\w-]\.md\b/g;
+
+function mdLinks(xterm) {
+  return {
+    provideLinks(y, callback) {
+      const text = xterm.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
+      callback([...text.matchAll(MD_PATH)].map((m) => ({
+        text: m[0],
+        range: { start: { x: m.index + 1, y }, end: { x: m.index + m[0].length, y } },
+        activate: () => openDoc(m[0]),
+      })));
+    },
+  };
+}
+
+// A relative path resolves against the folder of the session that printed it.
+async function openDoc(file) {
+  const cwd = sessionsIn(tree).find((s) => isOpen(s))?.cwd ?? "";
+  const res = await fetch(`/api/file?path=${encodeURIComponent(file)}&cwd=${encodeURIComponent(cwd)}`);
+  const d = await res.json();
+  docview.querySelector(".where").textContent = d.path ?? file;
+  docview.querySelector(".md").innerHTML = res.ok ? d.html : `<p>${esc(d.error)}</p>`;
+  docview.hidden = false;
+  docview.scrollTop = 0;
+}
+
+docview.querySelector(".close").addEventListener("click", () => {
+  docview.hidden = true;
+  term?.xterm.focus();
+});
 
 panel.addEventListener("click", (e) => {
   if (e.target.closest(".close")) closePanel();

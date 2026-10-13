@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { marked } from "marked";
+import { Marked } from "marked";
 import { parseNode, type NodeFields } from "./node.ts";
-import { expandHome, resolveInRoot } from "./paths.ts";
+import { expandHome, isInside, PathError, resolveInRoot } from "./paths.ts";
 import { lastSessionFile, readSessions, splitRepo, type Session } from "./sessions.ts";
 import type { WorkerState } from "./workers.ts";
 
@@ -16,6 +16,17 @@ export type TreeNode = NodeFields & {
 };
 
 const ORG_MAX_LINES = 40;
+
+// Agents write this markdown, and the page that shows it can start sessions. So raw HTML is shown
+// as text (comments are dropped), and script links go nowhere.
+const escape = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const markdown = new Marked({
+  renderer: { html: ({ text }) => (text.trim().startsWith("<!--") ? "" : escape(text)) },
+  walkTokens: (t) => {
+    if ((t.type === "link" || t.type === "image") && /^\s*(javascript|vbscript|data):/i.test(t.href)) t.href = "#";
+  },
+});
+const toHtml = (md: string) => markdown.parse(md, { async: false });
 
 export function readTree(root: string): TreeNode {
   return readNode(root, "");
@@ -34,8 +45,19 @@ export function readNodeDetail(root: string, rel: string) {
     ...fields,
     sessions: readSessions(dir),
     body,
-    html: marked.parse(body, { async: false }),
+    html: toHtml(body),
   };
+}
+
+// A markdown file anywhere in the tree or in a node's local repo, rendered. A relative path
+// resolves against `cwd`, the folder of the session that printed it.
+export function readDoc(root: string, file: string, cwd = root) {
+  const abs = fs.realpathSync(path.resolve(expandHome(cwd), expandHome(file)));
+  if (!abs.endsWith(".md")) throw new PathError(`not a markdown file: ${file}`);
+  const repos = flatten(readTree(root)).flatMap((n) => n.repos.filter((r) => !splitRepo(r).host));
+  const allowed = [root, ...repos].map(expandHome).filter((d) => fs.existsSync(d)).map((d) => fs.realpathSync(d));
+  if (!allowed.some((d) => isInside(d, abs))) throw new PathError(`outside the node tree and its repos: ${file}`);
+  return { path: abs, html: toHtml(fs.readFileSync(abs, "utf8")) };
 }
 
 function readNode(root: string, rel: string): TreeNode {

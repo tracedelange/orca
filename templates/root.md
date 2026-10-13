@@ -30,5 +30,9 @@ Run `orca new <path> --title "..." --goal "..."`. The path is relative to this r
 If the CLI is not available, make the directory and write a `CLAUDE.md` in the format above.
 When you change a node, add a dated line to its Log.
 
+## Outputs
+Write documents for the user (plans, reports, reviews) as Markdown in your node's `docs/` folder.
+Give each file's full path in your reply, so the orca viewer can open it.
+
 ## Reporting
 End every reply with one line: `Status: <one sentence on where things stand>`. The viewer shows it.
