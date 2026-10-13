@@ -560,7 +560,14 @@ function renderRail() {
     (a, b) => STATES.indexOf(sessionState(a)) - STATES.indexOf(sessionState(b)) || b.updatedAt.localeCompare(a.updatedAt),
   );
   const attention = sessions.filter((s) => ["needs", "new"].includes(sessionState(s))).length;
-  document.title = attention ? `(${attention}) Orca` : "Orca";
+  // The open session leads the tab title, so the browser and OS switchers show it too.
+  const here = term && byPath.get(term.path)?.data.title;
+  document.title = `${attention ? `(${attention}) ` : ""}${here ? `${here} · ` : ""}Orca`;
+  // Your last prompt under the terminal's title; hover it for the latest status.
+  const open = term && sessionsIn(graphRoot).find((s) => isOpen(s));
+  const prompt = termview.querySelector(".prompt");
+  prompt.textContent = open?.prompt ?? "";
+  prompt.title = open?.summary ?? "";
 
   const wasHidden = rail.hidden;
   rail.hidden = !sessions.length && !jobs.length;
@@ -580,7 +587,7 @@ function railRow(s) {
   const st = sessionState(s);
   return `<li><button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
     <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${STATE_LABEL[st]}</span></span>
-    ${s.summary ? `<span class="sum">${esc(s.summary)}</span>` : ""}
+    ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
   </button></li>`;
 }
@@ -1123,7 +1130,16 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   document.body.classList.add("mode-term");
   termview.hidden = false;
   const d = byPath.get(path);
-  termview.querySelector(".kicker").textContent = [d?.data.title ?? path, path || "/", host, name].filter(Boolean).join("  ·  ");
+  const title = d?.data.title ?? path;
+  const trail = d ? d.ancestors().reverse().slice(0, -1).map((a) => a.data.title).join(" / ") : path || "/";
+  termview.querySelector(".title").textContent = title;
+  termview.querySelector(".trail").textContent = [trail, host, name].filter(Boolean).join("  ·  ");
+  // Flash the title over the terminal, so a switch is hard to miss.
+  const flash = termview.querySelector(".flash");
+  flash.textContent = title;
+  flash.classList.remove("on");
+  void flash.offsetWidth; // restart the animation
+  flash.classList.add("on");
   relayout(0);
 
   const xterm = new Terminal({

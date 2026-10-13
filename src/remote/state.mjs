@@ -64,6 +64,7 @@ export function nextSession(prev, event, input, extra) {
     ...extra.fields,
     state: nextState(event, input.notification_type, prev.state),
     summary: event === "Stop" ? statusLine(input.last_assistant_message ?? "") : prev.summary,
+    prompt: event === "UserPromptSubmit" ? input.prompt?.trim().split("\n")[0].slice(0, 200) : prev.prompt,
     finishedAt: event === "Stop" ? new Date().toISOString() : prev.finishedAt,
     updatedAt: new Date().toISOString(),
   };

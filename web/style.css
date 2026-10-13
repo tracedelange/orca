@@ -117,7 +117,29 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 }
 #termview[hidden] { display: none; }
 #termview .top { display: flex; justify-content: space-between; gap: 16px; font: 11px var(--sans); color: var(--ink-3); padding-bottom: 8px; }
-#termview .kicker { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#termview .top { align-items: baseline; }
+#termview .kicker { display: grid; gap: 2px; min-width: 0; }
+#termview .head { display: flex; align-items: baseline; gap: 12px; min-width: 0; overflow: hidden; white-space: nowrap; }
+#termview .prompt { font: italic 14px var(--serif); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#termview .prompt:not(:empty)::before { content: "› "; font-style: normal; }
+#termview .title { font: 600 18px var(--serif); color: var(--ink); }
+#termview .trail { overflow: hidden; text-overflow: ellipsis; }
+#termview .flash {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  padding: 8px 18px;
+  font: 600 20px var(--serif);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--ink-3);
+  pointer-events: none;
+  opacity: 0;
+}
+#termview .flash.on { animation: flash 700ms ease-out; }
+@keyframes flash { 0%, 35% { opacity: 0.95; } 100% { opacity: 0; } }
 #termview .keys { white-space: nowrap; }
 
 #crumbs { font: 12px var(--sans); color: var(--ink-3); }
@@ -279,7 +301,10 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   background: none;
   color: var(--ink);
 }
-#rail li button:hover, #rail li button.open { background: var(--paper-2); }
+#rail li button:hover { background: var(--paper-2); }
+/* The open session is inverted, so it never reads as a hovered row. */
+#rail li button.open { background: var(--ink); border-left-color: var(--ink); }
+#rail li button.open :is(.name, .sum, .mark, .st) { color: var(--paper); }
 #rail li button.a-needs { border-left-color: var(--accent); }
 #rail li button.a-new { border-left-color: var(--accent); }
 #rail li button.a-failed { border-left-color: var(--accent); }
@@ -293,6 +318,7 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail .name { font: 600 15px var(--serif); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #rail .st { font: 10px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
 #rail .a-ready .name, #rail .a-ready .sum, #rail .a-ready .mark { color: var(--ink-2); }
+#rail .sum.you::before { content: "› "; }
 #rail .sum {
   font: 14px/1.35 var(--serif);
   display: -webkit-box;

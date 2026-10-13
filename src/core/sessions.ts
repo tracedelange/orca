@@ -18,6 +18,7 @@ export type Session = {
   node?: string; // node path, for worker sessions the laptop launched
   state: SessionState;
   summary?: string;
+  prompt?: string; // first line of the user's last prompt
   finishedAt?: string; // when the last turn ended; the viewer shows results newer than you have seen as new
   updatedAt: string;
 };
