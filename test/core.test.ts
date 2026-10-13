@@ -12,7 +12,7 @@ const CLI = path.resolve(import.meta.dirname, "../bin/orca.js");
 
 function seededRoot(): string {
   const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");
-  execFileSync(CLI, ["init"], { env: { ...process.env, NODES_ROOT: root } });
+  fs.cpSync(path.resolve(import.meta.dirname, "seed"), root, { recursive: true });
   return root;
 }
 
@@ -46,12 +46,21 @@ test("parseNode keeps broken files as nodes with errors", () => {
   assert.deepEqual(odd.extra, { owner: "me" });
 });
 
-test("init seeds a tree that passes check", () => {
+test("init creates a root with no children that passes check", () => {
+  const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");
+  const env = { ...process.env, NODES_ROOT: root };
+  execFileSync(CLI, ["init"], { env });
+  const nodes = flatten(readTree(root));
+  assert.equal(nodes.length, 1);
+  assert.deepEqual(nodes[0].issues, []);
+  execFileSync(CLI, ["check"], { env });
+});
+
+test("the test seed passes check", () => {
   const root = seededRoot();
   const nodes = flatten(readTree(root));
   assert.equal(nodes.length, 9);
   assert.deepEqual(nodes.flatMap((n) => n.issues), []);
-  execFileSync(CLI, ["check"], { env: { ...process.env, NODES_ROOT: root } });
 });
 
 test("new creates missing parents and refuses to overwrite", () => {

@@ -50,51 +50,44 @@ See `design.md` for the full specification.
    npm i -g @tracedelange/orca
    ```
 
-2. Install the hook and the `/orca` skill:
+2. Start orca:
 
    ```sh
-   orca install-hooks
+   orca up
    ```
 
-3. Start the server:
+   This command installs the hook and the `/orca` skill. It makes an empty node tree in `~/nodes` if there is no tree. Then it starts the server and shows the URL of the viewer.
 
-   ```sh
-   orca start
-   ```
-
-4. Make the node tree in `~/nodes`:
-
-   ```sh
-   orca init
-   ```
-
-5. Open the viewer:
+3. Open the viewer:
 
    ```sh
    orca open
    ```
 
-`nodes` is an alias for `orca`. To remove the hook from `~/.claude/settings.json`, run `orca install-hooks --remove`.
+`nodes` is an alias for `orca`. You can run `orca up` again at any time.
 
-The hook in `~/.claude/settings.json` uses the absolute path of the installed package. If you change the Node version (for example, with nvm), the path changes. Then run `orca install-hooks` again.
+The hook in `~/.claude/settings.json` uses the absolute path of the installed package. If you change the Node version (for example, with nvm), the path changes. Then run `orca up` again.
 
 ### Settings
 
 | Variable | Default | What it changes |
 |---|---|---|
 | `NODES_ROOT` | `~/nodes` | The root folder of the node tree. |
-| `PORT` | `4317` | The port of the server. Set it before `orca start`. |
+| `PORT` | `4317` | The port of the server. Set it before `orca up`. |
 
 ## The server
 
 ```sh
-orca start          # installs ~/Library/LaunchAgents/com.orca.server.plist and starts the server
-orca stop           # stops the server and removes the plist, so it does not start at login
+orca up             # installs the hook, makes ~/nodes if necessary, and starts the server
+orca down           # stops the server and removes the plist, so it does not start at login
 orca restart        # use this after you change server code
-orca status
+orca status         # shows the server, the hook, and the root
+orca uninstall      # stops the server and removes the hook and the /orca skill
 orca open           # opens the viewer in the browser
 orca logs           # follows ~/Library/Logs/orca.log
 ```
+
+`orca uninstall` does not delete `~/nodes`, because the tree holds your notes. The command shows the path of the tree. Delete the folder yourself if you do not want it.
 
 To run the server in the foreground, run `npm start`.
 
@@ -199,7 +192,7 @@ orca dispatch work "..." --host my-worker
 
 ## Development
 
-To run orca from a checkout, clone the repository. Then run `npm install && npm link && orca install-hooks && orca start`.
+To run orca from a checkout, clone the repository. Then run `npm install && npm link && orca up`.
 
 A checkout runs the TypeScript source directly, so CLI changes apply immediately. After you change server code, run `orca restart`. `CLAUDE.md` gives the full development loop.
 

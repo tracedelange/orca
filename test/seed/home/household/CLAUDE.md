@@ -1,5 +1,5 @@
 ---
-title: Personal
+title: Household
 ---
 
 ## Context
@@ -9,4 +9,4 @@ title: Personal
 (placeholder) Decisions, constraints and open questions.
 
 ## Log
-- {{date}}: Node created.
+- 2026-01-01: Node created.
