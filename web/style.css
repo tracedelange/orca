@@ -71,6 +71,8 @@ header > * { pointer-events: auto; flex-shrink: 0; }
 body:not(.mode-term):has(#panel:not([hidden])) header { right: 444px; }
 #crumbs { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #mapbtn { display: none; }
+/* The icon is a mask so it takes the theme's ink colour. */
+#logo { width: 36px; height: 36px; background: var(--ink); mask: url(/orca.svg) center / contain no-repeat; }
 
 /* Plan usage: one bar per window, accent only when a window passes 80%. */
 #usage { margin-left: auto; display: flex; gap: 16px; font: 11px var(--mono); color: var(--ink-2); white-space: nowrap; }

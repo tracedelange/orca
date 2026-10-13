@@ -21,6 +21,7 @@ const STATIC: Record<string, [string, string]> = {
   "/": [file("../../web/index.html"), "text/html; charset=utf-8"],
   "/app.js": [file("../../web/app.js"), JS],
   "/style.css": [file("../../web/style.css"), "text/css; charset=utf-8"],
+  "/orca.svg": [file("../../web/orca.svg"), "image/svg+xml"],
   "/vendor/d3.js": [file("../../node_modules/d3/dist/d3.min.js"), JS],
   "/vendor/xterm.js": [file("../../node_modules/@xterm/xterm/lib/xterm.js"), JS],
   "/vendor/xterm.css": [file("../../node_modules/@xterm/xterm/css/xterm.css"), "text/css; charset=utf-8"],
