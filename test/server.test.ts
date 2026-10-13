@@ -84,3 +84,19 @@ test("edit endpoints refuse other origins and GET, and report conflicts", async 
   assert.equal((await post("create", { path: "work" }, base)).status, 409);
   assert.equal((await post("update", { path: "work", title: "Work!" }, base)).status, 200);
 });
+
+test("dispatch returns at once and keeps a failed job for retry until dismissed", async () => {
+  const post = async (op: string, body: unknown) =>
+    (await fetch(`${base}/api/nodes/${op}`, { method: "POST", body: JSON.stringify(body), headers: { origin: base } })).json();
+  const jobs = async () => (await fetch(`${base}/api/dispatches`)).json();
+  // A scope outside the root fails before any Haiku call.
+  const job = await post("dispatch", { path: "../../tmp", prompt: "do a thing" });
+  assert.equal(job.prompt, "do a thing");
+  await new Promise((r) => setTimeout(r, 50));
+  assert.match((await jobs()).find((j: any) => j.id === job.id).error, /\S/);
+  await post("retry", { id: job.id });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.ok((await jobs()).find((j: any) => j.id === job.id).error);
+  await post("dismiss", { id: job.id });
+  assert.equal((await jobs()).length, 0);
+});

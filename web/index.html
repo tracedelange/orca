@@ -23,6 +23,7 @@
     <button id="archived" type="button" title="Show archived nodes">Archived</button>
     <button id="mapbtn" type="button">Map</button>
     <button id="theme" type="button" title="Theme: system, light or dark"></button>
+    <button id="keys" type="button" title="Keyboard shortcuts">?</button>
   </header>
 
   <svg id="map">
@@ -58,9 +59,35 @@
     </form>
   </dialog>
 
+  <!-- End: ⌥Q ends the current rail session, after Enter. -->
+  <dialog id="ender">
+    <form class="form" method="dialog">
+      <p class="hint what"></p>
+      <div class="row"><button type="submit" value="end" autofocus>End session</button><button type="submit" value="">Cancel</button><span class="hint">↵ end · esc cancel</span></div>
+    </form>
+  </dialog>
+
+  <!-- Keys: every hotkey, from the ? button in the header. -->
+  <dialog id="keyhelp">
+    <form class="form" method="dialog">
+      <table>
+        <tr><th>⌘K</th><td>Dispatch a task, from anywhere</td></tr>
+        <tr><th>/</th><td>Dispatch a task, on the map</td></tr>
+        <tr><th>f</th><td>Fit the map to the screen</td></tr>
+        <tr><th>⌘.</th><td>Toggle between the map and the last terminal</td></tr>
+        <tr><th>Esc</th><td>Back to the map, or close the panel</td></tr>
+        <tr><th>⇧Esc</th><td>Send Escape to Claude</td></tr>
+        <tr><th>⌥Tab</th><td>Next session in the rail</td></tr>
+        <tr><th>⌥⇧Tab</th><td>Previous session in the rail</td></tr>
+        <tr><th>⌥Q</th><td>End the current session, after Enter</td></tr>
+      </table>
+      <div class="row"><button type="submit" autofocus>Close</button></div>
+    </form>
+  </dialog>
+
   <!-- Terminal mode: one session fills the space right of the rail. -->
   <section id="termview" hidden>
-    <div class="top"><span class="kicker"></span><span class="keys">esc map · shift+esc sends esc to claude · ⌘. toggle · ⌥tab next</span></div>
+    <div class="top"><span class="kicker"></span><span class="keys">esc map · shift+esc sends esc to claude · ⌘. toggle · ⌥tab next · ⌥q end</span></div>
     <div id="term"></div>
   </section>
 

@@ -280,6 +280,10 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail li button:hover, #rail li button.open { background: var(--paper-2); }
 #rail li button.a-needs { border-left-color: var(--accent); }
 #rail li button.a-new { border-left-color: var(--accent); }
+#rail li button.a-failed { border-left-color: var(--accent); }
+#rail .a-failed .mark, #rail .a-failed .st { color: var(--accent); }
+#rail .a-placing .mark { animation: placing 1.2s ease-in-out infinite; }
+@keyframes placing { 50% { opacity: 0.3; } }
 #rail li button { min-width: 0; }
 #rail .line { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
 #rail .mark { font: 11px var(--sans); width: 12px; }
@@ -336,11 +340,11 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .issues li::before { content: "! "; color: var(--accent); }
 
 #panel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-:is(#panel, #dispatcher) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
-:is(#panel, #dispatcher) .form[hidden] { display: none; }
-:is(#panel, #dispatcher) .form label { display: grid; gap: 5px; }
-:is(#panel, #dispatcher) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-:is(#panel, #dispatcher) .form input, :is(#panel, #dispatcher) .form textarea, :is(#panel, #dispatcher) .form select {
+:is(#panel, #dispatcher, #ender, #keyhelp) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form[hidden] { display: none; }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form label { display: grid; gap: 5px; }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form input, :is(#panel, #dispatcher, #ender, #keyhelp) .form textarea, :is(#panel, #dispatcher, #ender, #keyhelp) .form select {
   font: 15px var(--serif);
   color: var(--ink);
   background: var(--paper);
@@ -349,20 +353,23 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   padding: 7px 9px;
   resize: vertical;
 }
-:is(#panel, #dispatcher) .form input:focus, :is(#panel, #dispatcher) .form textarea:focus, :is(#panel, #dispatcher) .form select:focus { outline: none; border-color: var(--ink); }
-:is(#panel, #dispatcher) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-:is(#panel, #dispatcher) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
-:is(#panel, #dispatcher) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
-:is(#panel, #dispatcher) .form .err[hidden] { display: none; }
-#dispatcher {
+:is(#panel, #dispatcher, #ender, #keyhelp) .form input:focus, :is(#panel, #dispatcher, #ender, #keyhelp) .form textarea:focus, :is(#panel, #dispatcher, #ender, #keyhelp) .form select:focus { outline: none; border-color: var(--ink); }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
+:is(#panel, #dispatcher, #ender, #keyhelp) .form .err[hidden] { display: none; }
+:is(#dispatcher, #ender, #keyhelp) {
   width: min(560px, calc(100vw - 32px));
   padding: 0;
   border: 1px solid var(--ink-3);
   background: var(--paper-2);
   color: var(--ink);
 }
-#dispatcher::backdrop { background: rgb(0 0 0 / 0.3); }
-#dispatcher .form { border: none; margin: 0; padding: 20px; }
+:is(#dispatcher, #ender, #keyhelp)::backdrop { background: rgb(0 0 0 / 0.3); }
+:is(#dispatcher, #ender, #keyhelp) .form { border: none; margin: 0; padding: 20px; }
+#keyhelp table { border-collapse: collapse; font: 14px var(--serif); }
+#keyhelp th { font: 500 12px var(--sans); text-align: left; color: var(--ink-2); padding: 4px 18px 4px 0; white-space: nowrap; }
+#keyhelp td { padding: 4px 0; }
 #panel .sessions { margin: 0 0 22px; }
 #panel .sec-head {
   display: flex;

@@ -33,6 +33,7 @@ let editing = false;  // a form is open in the panel; polling must not redraw it
 const rail = document.getElementById("rail");
 let seen = {}; // sessionId -> finishedAt of the last result you looked at; the server keeps it for every device
 let seenText = "";
+let jobs = []; // dispatches still being placed, or failed: [{ id, prompt, host, startedAt, error }]
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
 const archivedButton = document.getElementById("archived");
@@ -42,7 +43,8 @@ archivedButton.classList.toggle("on", showArchived);
 
 async function load() {
   fetch("/api/workers").then((r) => r.json()).then((w) => (workerList = w)).catch(() => {});
-  const [res, seenRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen")]);
+  const [res, seenRes, jobsRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches")]);
+  jobs = await jobsRes.json();
   const text = await res.text();
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
   const nextSeen = await seenRes.text();
@@ -530,14 +532,15 @@ function renderRail() {
   document.title = attention ? `(${attention}) Orca` : "Orca";
 
   const wasHidden = rail.hidden;
-  rail.hidden = !sessions.length;
+  rail.hidden = !sessions.length && !jobs.length;
   // Working sessions get their own section at the top; the rest stay most urgent first.
-  const groups = { working: [], rest: [] };
-  for (const s of sessions) groups[sessionState(s) === "working" ? "working" : "rest"].push(s);
+  // Dispatches still being placed sit at the top of Working.
+  const groups = { working: jobs.map(jobRow), rest: [] };
+  for (const s of sessions) groups[sessionState(s) === "working" ? "working" : "rest"].push(railRow(s));
   for (const [name, list] of Object.entries(groups)) {
     const section = rail.querySelector(`[data-group="${name}"]`);
     section.hidden = !list.length;
-    section.querySelector("ol").innerHTML = list.map(railRow).join("");
+    section.querySelector("ol").innerHTML = list.join("");
   }
   if (wasHidden !== rail.hidden) relayout(300);
 }
@@ -551,7 +554,22 @@ function railRow(s) {
   </button></li>`;
 }
 
+function jobRow(j) {
+  const st = j.error ? "failed" : "placing";
+  return `<li><button type="button" class="end" data-dismiss="${esc(j.id)}" title="Dismiss">Dismiss</button><button type="button" class="a-${st}"${j.error ? ` data-retry="${esc(j.id)}" title="Retry"` : ""}>
+    <span class="line"><span class="mark">${j.error ? "!" : "…"}</span><span class="name">${esc(j.prompt.trim().split("\n")[0])}</span><span class="st">${j.error ? "failed · retry" : "placing"}</span></span>
+    ${j.error ? `<span class="sum">${esc(j.error)}</span>` : ""}
+    <span class="meta">${j.host ? `${esc(j.host)} · ` : ""}${ago(j.startedAt)}</span>
+  </button></li>`;
+}
+
 rail.addEventListener("click", async (e) => {
+  const job = e.target.closest("[data-retry], [data-dismiss]");
+  if (job) {
+    const { retry, dismiss } = job.dataset;
+    await post(retry ? "retry" : "dismiss", { id: retry ?? dismiss }).catch(() => {});
+    return load();
+  }
   const endButton = e.target.closest("[data-end]");
   if (endButton) return endSession(endButton);
   const row = e.target.closest("button[data-sid]");
@@ -566,11 +584,15 @@ rail.addEventListener("click", async (e) => {
   else markSeen([s]);
 });
 
+// The current rail row is the open terminal's, or else the selected node's.
+const railRows = () => [...rail.querySelectorAll("button[data-sid]")];
+const isCurrent = (r) => (term ? r.classList.contains("open") : r.dataset.path === selected);
+
 // ⌥Tab and ⌥⇧Tab step down and up the rail in its shown order, wrapping, as a click would.
 function stepRail(back) {
-  const rows = [...rail.querySelectorAll("button[data-sid]")];
+  const rows = railRows();
   if (!rows.length) return;
-  const at = rows.findIndex((r) => (term ? r.classList.contains("open") : r.dataset.path === selected));
+  const at = rows.findIndex(isCurrent);
   const next = at < 0 ? (back ? rows.length - 1 : 0) : (at + (back ? -1 : 1) + rows.length) % rows.length;
   rows[next].click();
 }
@@ -738,6 +760,10 @@ async function endSession(button) {
     }, 3000);
     return;
   }
+  return end(id);
+}
+
+async function end(id) {
   const s = sessionsIn(tree).find((x) => x.sessionId === id);
   if (s && isOpen(s)) closeTerminal();
   try {
@@ -839,7 +865,7 @@ async function submitForm(form) {
   if (selected !== null) closeForm();
 }
 
-// Placement takes a few seconds (a Haiku call), so the form shows progress, then the terminal opens.
+// Placement takes a few seconds (a Haiku call), so it runs on the server and shows in the rail until the session starts.
 // ---- Dispatch: one dialog over everything; Haiku picks the node from the whole tree ----
 
 const dispatcher = document.getElementById("dispatcher");
@@ -853,28 +879,34 @@ function openDispatch() {
   dispatchForm.prompt.focus();
 }
 dispatchForm.querySelector(".cancel").addEventListener("click", () => dispatcher.close());
+
+// ⌥Q ends the current rail session, as its End button does, once Enter confirms.
+const ender = document.getElementById("ender");
+function confirmEnd() {
+  const row = railRows().find(isCurrent);
+  if (!row || ender.open) return;
+  ender.dataset.sid = row.dataset.sid;
+  ender.querySelector(".what").textContent = `End ${row.querySelector(".name").textContent}?`;
+  ender.returnValue = "";
+  ender.showModal();
+}
+ender.addEventListener("close", () => ender.returnValue === "end" && end(ender.dataset.sid));
+
+const keyhelp = document.getElementById("keyhelp");
+document.getElementById("keys").addEventListener("click", () => keyhelp.showModal());
 dispatchForm.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) dispatchForm.requestSubmit();
 });
 dispatchForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const button = dispatchForm.querySelector("button[type=submit]");
-  button.disabled = true;
-  button.textContent = "Finding a place…";
   try {
-    const d = await post("dispatch", { path: "", prompt: dispatchForm.prompt.value, host: dispatchForm.host?.value });
+    await post("dispatch", { path: "", prompt: dispatchForm.prompt.value, host: dispatchForm.host?.value });
     dispatcher.close();
-    await load();
-    reveal(d.path);
-    await select(d.path);
-    openTerminal(d.tmux, d.path, d.host);
+    load();
   } catch (err) {
     const el = dispatchForm.querySelector(".err");
     el.textContent = err.message;
     el.hidden = false;
-  } finally {
-    button.disabled = false;
-    button.textContent = "Dispatch";
   }
 });
 
@@ -910,7 +942,13 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   xterm.open(el);
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
-    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k")) || (e.altKey && e.key === "Tab")) e.stopPropagation();
+    // ⌥Q types œ on a Mac, so match the physical key.
+    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k")) || (e.altKey && (e.key === "Tab" || e.code === "KeyQ"))) e.stopPropagation();
+    if (e.code === "KeyQ" && e.altKey) {
+      e.preventDefault();
+      if (e.type === "keydown") confirmEnd();
+      return false;
+    }
     if (e.key === "Tab" && e.altKey) {
       e.preventDefault(); // otherwise the browser moves focus, out to its own toolbar
       if (e.type === "keydown") stepRail(e.shiftKey);
@@ -1045,7 +1083,11 @@ addEventListener("keydown", (e) => {
     e.preventDefault();
     return openDispatch();
   }
-  if (dispatcher.open) return; // the dialog handles its own Escape
+  if (dispatcher.open || ender.open || keyhelp.open) return; // the dialogs handle their own Escape
+  if (e.code === "KeyQ" && e.altKey) {
+    e.preventDefault();
+    return confirmEnd();
+  }
   if (e.key === "Tab" && e.altKey) {
     e.preventDefault();
     return stepRail(e.shiftKey);

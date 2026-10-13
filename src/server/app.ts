@@ -3,7 +3,7 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import pty from "node-pty";
 import { WebSocketServer } from "ws";
-import { dispatch } from "../core/dispatch.ts";
+import { dismissDispatch, listJobs, queueDispatch, retryDispatch } from "../core/dispatch.ts";
 import { adoptSession, createNode, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
@@ -50,7 +50,9 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
     return { path: remote.s.node };
   },
   adopt: (root, b) => adoptSession(root, String(b.session ?? "")),
-  dispatch: (root, b) => dispatch(root, b.path, String(b.prompt ?? ""), b.host || undefined),
+  dispatch: (root, b) => queueDispatch(root, b.path, String(b.prompt ?? ""), b.host || undefined),
+  retry: (root, b) => (retryDispatch(root, String(b.id ?? "")), {}),
+  dismiss: (root, b) => (dismissDispatch(String(b.id ?? "")), {}),
   queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
   seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),
 };
@@ -75,6 +77,7 @@ export function createServer(root: string) {
     try {
       if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
       if (url.pathname === "/api/seen") return json(res, 200, readSeen(root));
+      if (url.pathname === "/api/dispatches") return json(res, 200, listJobs());
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));

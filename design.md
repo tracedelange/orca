@@ -212,8 +212,9 @@ Endpoints:
 | `GET /api/tree` | The whole tree as JSON. For each node: path, title, goal, repos, branch, extra fields, issues, child count, descendant count, sessions, and children. No bodies. Worker sessions are on their nodes. |
 | `GET /api/node?path=<path>` | One node: fields, sessions, the raw body, the rendered HTML body, and the absolute path of its `CLAUDE.md`. |
 | `GET /api/workers` | Each worker with host, name, and the last poll error, if there is one. |
+| `GET /api/dispatches` | Dispatches that Haiku is still placing, and failed dispatches with their error. The list is kept in memory. |
 | `POST /api/launch?path=&resume=&host=` | Starts a session. |
-| `POST /api/nodes/<op>` | `create`, `update`, `move`, `remove`, `end`, `adopt`, or `dispatch`. Each takes a JSON body. |
+| `POST /api/nodes/<op>` | `create`, `update`, `move`, `remove`, `end`, `adopt`, `dispatch`, `retry`, or `dismiss`. Each takes a JSON body. `dispatch` returns a job immediately and does the placement in the background. |
 | WebSocket `/api/term?session=&host=` | A terminal bridge. It runs `tmux attach` in a pty on the hub, or `ssh -t <host> tmux attach` for a worker. |
 
 Security rules:
@@ -275,7 +276,7 @@ A result stays new until the person opens the terminal of that session. The brow
 - Terminal, End, and Move into orca act on each session.
 - End needs a second click when the session is working or needs the person.
 
-**Header controls.** Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form.
+**Header controls.** Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form. The `?` button at the right end lists every hotkey.
 
 **Terminal mode.** When a terminal opens, it fills the space to the right of the rail. The map, the legend, and the panel step aside. A click on another rail row changes the terminal.
 
@@ -285,6 +286,7 @@ A result stays new until the person opens the terminal of that session. The brow
 | Shift+Esc | Sends Escape to Claude, for example to stop a turn. |
 | ⌘. | Toggles between the map and the last terminal. |
 | ⌥Tab, ⌥⇧Tab | Opens the next or previous rail row, as a click does. Works on the map too. |
+| ⌥Q | Ends the current rail session, as its End button does. Enter confirms and Esc cancels. Works on the map too. |
 
 **Refresh.** The viewer polls `/api/tree` every 5 seconds. It updates in place and keeps the root, the unpacked nodes, the panel, and the open terminal.
 

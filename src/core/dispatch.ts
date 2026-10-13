@@ -58,3 +58,37 @@ export async function dispatch(root: string, scope: string, prompt: string, host
 
 const within = (p: string, scope: string) => scope === "" || p === scope || p.startsWith(scope + "/");
 const quote = (s: string) => s.trim().split("\n").map((l) => `> ${l}`).join("\n");
+
+// Dispatches in flight, so the viewer can show them while Haiku places them. In memory: a restart drops them.
+export type Job = { id: string; prompt: string; scope: string; host?: string; startedAt: string; error?: string };
+const jobs = new Map<string, Job>();
+let nextId = 0;
+
+export const listJobs = () => [...jobs.values()];
+
+// Starts a dispatch in the background and returns its job at once.
+// On success the job leaves the list and the new session takes its place; on failure it stays with the error.
+export function queueDispatch(root: string, scope: string, prompt: string, host?: string): Job {
+  if (!prompt.trim()) throw new EditError("prompt is empty");
+  const job: Job = { id: String(++nextId), prompt, scope, host, startedAt: new Date().toISOString() };
+  jobs.set(job.id, job);
+  run(root, job);
+  return job;
+}
+
+export function retryDispatch(root: string, id: string) {
+  const job = jobs.get(id);
+  if (!job) throw new EditError("no such dispatch");
+  delete job.error;
+  job.startedAt = new Date().toISOString();
+  run(root, job);
+}
+
+export const dismissDispatch = (id: string) => jobs.delete(id);
+
+function run(root: string, job: Job) {
+  dispatch(root, job.scope, job.prompt, job.host).then(
+    () => jobs.delete(job.id),
+    (err) => (job.error = err.message),
+  );
+}
