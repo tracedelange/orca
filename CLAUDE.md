@@ -21,4 +21,4 @@ Commit messages must use conventional commits: `<type>(<optional scope>): <summa
 - If a change breaks the CLI, the hook or the node format, add `!` after the type: `feat!: ...`.
 - Do not edit `CHANGELOG.md` or the version in `package.json`. release-please writes them.
 
-release-please keeps a release PR open on GitHub. When the PR merges, CI tags the release and publishes `@tracedelange/orca` to npm.
+release-please keeps a release PR open on GitHub. When the PR merges, CI tags the release and publishes `@tdelange/orca` to npm.

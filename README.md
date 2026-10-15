@@ -50,7 +50,7 @@ See `design.md` for the full specification.
 1. Install orca:
 
    ```sh
-   npm i -g @tracedelange/orca
+   npm i -g @tdelange/orca
    ```
 
 2. Start orca:

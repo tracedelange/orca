@@ -170,7 +170,7 @@ The move is possible only when the session state is `ready`, so it never stops a
 
 ### 1. CLI: `orca`
 
-A TypeScript CLI. `npm i -g @tracedelange/orca` (or `npm link` in a checkout) puts it on the `PATH`. `nodes` is an alias.
+A TypeScript CLI. `npm i -g @tdelange/orca` (or `npm link` in a checkout) puts it on the `PATH`. `nodes` is an alias.
 
 | Command | What it does |
 |---|---|
