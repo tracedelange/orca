@@ -238,6 +238,16 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 .info circle { fill: var(--paper); stroke: var(--ink-2); }
 .info text { font: 600 10px var(--serif); fill: var(--ink-2); }
 .info:hover circle { stroke: var(--ink); }
+.add { cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.node:hover .add { opacity: 1; }
+.add circle { fill: var(--paper); stroke: var(--ink-2); }
+.add text { font: 600 12px var(--sans); fill: var(--ink-2); }
+.add:hover circle { stroke: var(--ink); }
+#quickadd { position: fixed; transform: translateX(-50%); z-index: 20; display: grid; gap: 6px; padding: 10px 12px; background: var(--paper); border: 1px solid var(--ink-3); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); }
+#quickadd[hidden] { display: none; }
+#quickadd span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+#quickadd input { width: 220px; font: 15px var(--serif); color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--ink-3); padding: 2px 0 4px; outline: none; }
+#quickadd input:focus { border-bottom-color: var(--ink); }
 
 #hint {
   position: fixed;

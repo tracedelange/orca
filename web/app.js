@@ -497,6 +497,9 @@ function build(g) {
     const info = body.append("g").attr("class", "info");
     info.append("circle").attr("r", 7);
     info.append("text").attr("dy", "0.35em").text("i");
+    const add = body.append("g").attr("class", "add");
+    add.append("circle").attr("r", 7);
+    add.append("text").attr("dy", "0.35em").text("+");
   });
   g.on("click", (e, n) => {
     e.stopPropagation();
@@ -507,6 +510,10 @@ function build(g) {
   g.select(".info").on("click", function (e) {
     e.stopPropagation();
     select(d3.select(this.parentNode.parentNode).datum().path);
+  });
+  g.select(".add").on("click", function (e) {
+    e.stopPropagation();
+    openQuickAdd(d3.select(this.parentNode.parentNode).datum());
   });
   g.call(d3.drag()
     .on("start", (e, n) => {
@@ -540,6 +547,8 @@ function fill(sel, t = d3.transition().duration(0)) {
   sel.select(".label").text((n) => rimText(n.d)).transition(t).attr("y", (n) => n.r + (n.d === graphRoot ? 37 : 29));
   sel.select(".info").style("display", (n) => (n.d.children && n.d !== graphRoot ? null : "none"))
     .transition(t).attr("transform", (n) => `translate(${n.r * Math.SQRT1_2},${-n.r * Math.SQRT1_2})`);
+  sel.select(".add").style("display", (n) => (n.d.others ? "none" : null))
+    .transition(t).attr("transform", (n) => `translate(${n.r * Math.SQRT1_2},${n.r * Math.SQRT1_2})`);
   sel.select(".sessions").each(function (n) { drawDots(d3.select(this), n); });
 }
 
@@ -937,8 +946,8 @@ const FORMS = {
     ${field("Goal", `<textarea name="goal" rows="2">${esc(n.goal ?? "")}</textarea>`)}
     <div class="row"><button type="submit">Save</button><button class="cancel" type="button">Cancel</button></div>`,
   child: () => `
-    ${field("Folder", `<input name="name" pattern="[^/.][^/]*" placeholder="data-pipeline" required>`)}
-    ${field("Title", `<input name="title" placeholder="Same as folder">`)}
+    ${field("Title", `<input name="title" placeholder="Data pipeline" required>`)}
+    ${field("Folder", `<input name="name" pattern="[^/.][^/]*" placeholder="From the title">`)}
     ${field("Goal", `<textarea name="goal" rows="2"></textarea>`)}
     <div class="row"><button type="submit">Create</button><button class="cancel" type="button">Cancel</button></div>`,
   move: (n) => `
@@ -983,7 +992,8 @@ async function submitForm(form) {
     if (kind === "edit") {
       await post("update", { path: n.path, ...v });
     } else if (kind === "child") {
-      await post("create", { path: n.path ? `${n.path}/${v.name}` : v.name, title: v.title, goal: v.goal });
+      const name = v.name || slug(v.title);
+      await post("create", { path: n.path ? `${n.path}/${name}` : name, title: v.title, goal: v.goal });
       if (n.path !== graphRoot.data.path) expanded.add(n.path); // unpack the parent so the new child shows
       writeExpanded();
     } else if (kind === "move") {
@@ -1008,6 +1018,54 @@ async function submitForm(form) {
   await load();
   if (selected !== null) closeForm();
 }
+
+// "Data pipeline" -> "data-pipeline"
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+// ---- Quick add: the "+" on a node asks for a title and creates a child under it ----
+
+const quickAdd = document.createElement("form");
+quickAdd.id = "quickadd";
+quickAdd.hidden = true;
+quickAdd.innerHTML = `<span>New child · ↵</span><input placeholder="Title" autocomplete="off" required>`;
+document.body.append(quickAdd);
+const quickInput = quickAdd.querySelector("input");
+
+function openQuickAdd(n) {
+  const t = d3.zoomTransform(svg.node());
+  const box = svg.node().getBoundingClientRect();
+  quickAdd.style.left = `${box.left + t.applyX(n.x)}px`;
+  quickAdd.style.top = `${box.top + t.applyY(n.y + n.r + 36)}px`; // under the title and label
+  quickAdd.dataset.parent = n.path;
+  quickInput.value = "";
+  quickAdd.hidden = false;
+  quickInput.focus();
+}
+
+quickInput.addEventListener("input", () => quickInput.setCustomValidity(""));
+quickInput.addEventListener("blur", () => (quickAdd.hidden = true));
+quickAdd.addEventListener("mousedown", (e) => e.target !== quickInput && e.preventDefault()); // a click on the card keeps it open
+quickInput.addEventListener("keydown", (e) => {
+  e.stopPropagation(); // Escape closes this, not the panel
+  if (e.key === "Escape") quickInput.blur();
+});
+quickAdd.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const parent = quickAdd.dataset.parent;
+  const title = quickInput.value.trim();
+  const path = parent ? `${parent}/${slug(title)}` : slug(title);
+  try {
+    await post("create", { path, title });
+  } catch (err) {
+    quickInput.setCustomValidity(err.message);
+    return quickInput.reportValidity();
+  }
+  quickInput.blur();
+  if (parent !== graphRoot.data.path) expanded.add(parent); // unpack the parent so the new child shows
+  writeExpanded();
+  await load();
+  select(path);
+});
 
 // Placement takes a few seconds (a Haiku call), so it runs on the server and shows in the rail until the session starts.
 // ---- Dispatch: one dialog over everything; Haiku picks the node under the parent ----
