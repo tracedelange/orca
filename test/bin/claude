@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+// A stand-in for the claude CLI in tests. It logs its arguments to $FAKE_CLAUDE_LOG, one JSON array per line.
+// A `-p` call answers from $FAKE_CLAUDE_ANSWER: {"place": <placement suggestion>, "plan": <queue plan>}, picked
+// by the schema it is given. Any other call is an interactive session, which idles until killed.
+import fs from "node:fs";
+
+const args = process.argv.slice(2);
+if (process.env.FAKE_CLAUDE_LOG) fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(args) + "\n");
+if (args.includes("-p")) {
+  const answers = JSON.parse(process.env.FAKE_CLAUDE_ANSWER ?? "{}");
+  const answer = args[args.indexOf("--json-schema") + 1].includes('"slug"') ? answers.plan : answers.place;
+  console.log(JSON.stringify(answer ? { is_error: false, structured_output: answer } : { is_error: true, result: "no answer set" }));
+} else {
+  setInterval(() => {}, 60_000);
+}
