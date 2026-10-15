@@ -41,6 +41,7 @@ const revealed = new Set(); // sessionIds whose node has been unpacked onto the 
 let showArchived = readFlag("orca.showArchived");
 let obsidian = null; // { vault, folder } once the user opts in to copying documents there
 let idleMinutes = 30; // children quiet for longer than this share one "others" node
+let showTailnet = !readFlag("orca.noTailnet"); // the tailnet in the usage bar
 let notify = readFlag("orca.notify"); // Mac notifications for sessions that need you or finish
 let motion = !readFlag("orca.still"); // starfield and link flow on the map
 document.body.classList.toggle("still", !motion);
@@ -1376,6 +1377,7 @@ document.getElementById("settings").addEventListener("click", async () => {
   setting("idle").value = idleMinutes;
   setting("motion").checked = motion;
   setting("notify").checked = notify && Notification.permission === "granted";
+  setting("tailnet").checked = showTailnet;
   for (const k in knobs) setting(k).value = knobs[k];
   showKnobs();
   const o = await loadObsidian();
@@ -1417,6 +1419,9 @@ settings.addEventListener("close", async () => {
   try { localStorage.setItem("orca.motionKnobs", JSON.stringify(knobs)); } catch {}
   idleMinutes = Number(setting("idle").value);
   try { localStorage.setItem("orca.idleMinutes", idleMinutes); } catch {}
+  showTailnet = setting("tailnet").checked;
+  try { localStorage.setItem("orca.noTailnet", showTailnet ? "0" : "1"); } catch {}
+  loadTailnet();
   notify = setting("notify").checked;
   try { localStorage.setItem("orca.notify", notify ? "1" : "0"); } catch {}
   motion = setting("motion").checked;
@@ -1775,6 +1780,8 @@ addEventListener("keydown", (e) => {
 // The tailnet leads the usage card. "Running" shows its name; anything else shows the state, in the accent.
 const net = document.createElement("span");
 async function loadTailnet() {
+  net.hidden = !showTailnet;
+  if (!showTailnet) return;
   const t = await fetch("/api/tailnet").then((r) => r.json()).catch(() => ({ state: "unavailable" }));
   const up = t.state === "Running";
   net.className = up ? "" : "hot";
