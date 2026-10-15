@@ -13,7 +13,7 @@ import { liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
-import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type WorkerState } from "../core/workers.ts";
+import { attachArgs, findWorker, pollWorkers, remoteEnd, SAFE, startSession, type WorkerState } from "../core/workers.ts";
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const JS = "text/javascript; charset=utf-8";
@@ -131,11 +131,10 @@ export function createServer(root: string) {
     // Watching a child: read-only, and its window keeps the size its parent reads with `orca wait`.
     const watch = url.searchParams.get("watch") === "1";
     const flags = watch ? ["-f", "read-only,ignore-size"] : [];
-    // A worker session must be one we polled; a local one must be a live tmux session here.
+    // A worker session needs only a safe name: a new one sits at Claude's folder-trust prompt,
+    // before any hook reports it. A local one must be a live tmux session here.
     const worker = host ? findWorker(root, host) : undefined;
-    const known = host
-      ? !!worker && workers.some((w) => w.host === worker.host && w.sessions.some((s) => s.tmux === name))
-      : liveTmuxSessions().has(name);
+    const known = host ? !!worker && SAFE.test(name) : liveTmuxSessions().has(name);
     if (url.pathname !== "/api/term" || !sameOrigin(req) || !known) {
       socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
       return;
