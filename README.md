@@ -37,6 +37,8 @@ AI-driven-development has led to a new stage of software hyper-customizability. 
 
 The vision for this project is a harness that's better at managing your most valuable resource: Your attention. Simply, it'a graph view tied to claude session management. This should look familiar to Obsidian users. The thesis behind the project is not to burn more tokens faster, but to treat your awareness / attention like you're the executive of your workflow, because you are!
 
+<p align="center"><img src="media/terminal-view.png" width="720" alt="The terminal view: the session rail on the left and a live Claude Code session on the right"></p>
+
 ## How it works
 
 | Part | What it does |
@@ -195,7 +197,7 @@ orca dispatch work "..." --host my-worker
 
 ### Terminals
 
-<p align="center"><img src="media/terminal-view.png" width="720" alt="The terminal view: the session rail on the left and a live Claude Code session on the right"></p>
+
 
 - When you open a terminal, the viewer goes into terminal mode. The session fills the space to the right of the rail, and a click in the rail changes the session.
 - Esc goes back to the map, on the node of that session. Shift+Esc sends Escape to Claude. ⌘. changes between the map and the last terminal.
