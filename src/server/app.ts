@@ -30,6 +30,7 @@ const STATIC: Record<string, [string, string]> = {
   "/vendor/xterm.js": [dep("@xterm/xterm", "xterm.js"), JS],
   "/vendor/xterm.css": [dep("@xterm/xterm", "../css/xterm.css"), "text/css; charset=utf-8"],
   "/vendor/addon-fit.js": [dep("@xterm/addon-fit", "addon-fit.js"), JS],
+  "/vendor/addon-web-links.js": [dep("@xterm/addon-web-links", "addon-web-links.js"), JS],
 };
 
 // Worker sessions, refreshed in the background so a slow or offline worker never delays a request.

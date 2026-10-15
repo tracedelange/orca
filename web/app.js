@@ -1337,6 +1337,7 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   xterm.open(el);
   // A worker session's files live on the worker, which the server cannot read.
   if (!host) xterm.registerLinkProvider(mdLinks(xterm));
+  xterm.loadAddon(new WebLinksAddon.WebLinksAddon((e, url) => window.open(url, "_blank", "noopener")));
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
     // ⌥Q types œ on a Mac, so match the physical key.
@@ -1433,7 +1434,8 @@ function mdLinks(xterm) {
   return {
     provideLinks(y, callback) {
       const text = xterm.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
-      callback([...text.matchAll(MD_PATH)].map((m) => ({
+      // A URL ending in .md is a web link, not a file.
+      callback([...text.matchAll(MD_PATH)].filter((m) => !/\w:$/.test(text.slice(0, m.index))).map((m) => ({
         text: m[0],
         range: { start: { x: m.index + 1, y }, end: { x: m.index + m[0].length, y } },
         activate: () => openDoc(m[0]),
