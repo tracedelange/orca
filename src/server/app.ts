@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import pty from "node-pty";
 import { WebSocketServer } from "ws";
 import { chooseDispatch, dismissDispatch, listJobs, queueDispatch, retryDispatch } from "../core/dispatch.ts";
-import { adoptSession, createNode, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
+import { adoptSession, createNode, docsDir, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
 import { copyToObsidian, listVaults, readObsidian, setObsidian } from "../core/obsidian.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
@@ -62,6 +62,8 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   open: (root, b) => (execFileSync("open", [docPath(root, String(b.path ?? ""))]), {}),
   // Selects the document in a Finder window.
   reveal: (root, b) => (execFileSync("open", ["-R", docPath(root, String(b.path ?? ""))]), {}),
+  // Opens the node's docs folder in Finder.
+  finder: (root, b) => (execFileSync("open", [docsDir(root, String(b.path ?? ""))]), {}),
   copy: (root, b) => ({ copied: copyToObsidian(root, docPath(root, String(b.path ?? ""))) }),
   obsidian: (root, b) => ({ obsidian: setObsidian(root, String(b.vault ?? ""), String(b.folder ?? "")) ?? null }),
   seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),

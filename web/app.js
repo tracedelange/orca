@@ -789,6 +789,7 @@ function renderPanel(n) {
     <div class="actions">
       <button data-form="edit" type="button">Edit</button>
       <button data-form="child" type="button">Add child</button>
+      <button class="finder" type="button">Docs folder</button>
       ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
       ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
     </div>
@@ -1517,6 +1518,8 @@ panel.addEventListener("click", (e) => {
   }
   const open = e.target.closest("[data-form]");
   if (open) openForm(open.dataset.form);
+  const finder = e.target.closest(".finder");
+  if (finder) popout(finder, selected, "finder");
   if (e.target.closest(".launch")) launchSession(false);
   if (e.target.closest(".resume")) launchSession(true);
   const endButton = e.target.closest("[data-end]");

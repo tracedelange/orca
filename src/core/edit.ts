@@ -135,6 +135,15 @@ function setGoal(body: string, goal: string): string {
   return first === -1 ? `${body.trimEnd()}\n\n${block}` : body.slice(0, first) + block + body.slice(first);
 }
 
+// The node's docs/ folder, made if missing, so the user has somewhere to drop files.
+export function docsDir(root: string, rel: string): string {
+  const dir = resolveInRoot(root, rel);
+  if (!fs.existsSync(path.join(dir, "CLAUDE.md"))) throw new EditError(`${rel || "/"} is not a node`);
+  const docs = path.join(dir, "docs");
+  fs.mkdirSync(docs, { recursive: true });
+  return docs;
+}
+
 function nodeDir(root: string, rel: string): string {
   const dir = resolveInRoot(root, rel);
   const segments = relOf(root, dir).split("/");
