@@ -92,7 +92,7 @@ test("queue tasks go in a ## Queue section before ## Log, in order", () => {
   assert.ok(text.indexOf("## Queue") < text.indexOf("## Log") || !text.includes("## Log"));
   assert.throws(() => addToQueue(root, "work", "  "), EditError);
   assert.deepEqual(queueItems("## Queue\n- [x] Done → work/done\n  Result: ok\n- [!] Broke → work/b — merge conflict\n## Log\n- [ ] not queue"),
-    [{ mark: "x", text: "Done", child: "work/done" }, { mark: "!", text: "Broke", child: "work/b" }]);
+    [{ mark: "x", text: "Done", child: "work/done", note: "ok" }, { mark: "!", text: "Broke", child: "work/b", note: "merge conflict" }]);
 });
 
 test("obsidian copy needs a known vault, stays inside it and never overwrites", async () => {

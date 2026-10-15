@@ -67,6 +67,8 @@ test("GET /api/file renders markdown in the tree and node repos, and nothing els
   const open = (p: string) => fetch(`${base}/api/nodes/open`, { method: "POST", body: JSON.stringify({ path: p }), headers: { origin: base } });
   assert.equal((await open(path.join(outside, "secret.md"))).status, 400);
   assert.equal((await open(path.join(docs, "notes.txt"))).status, 400);
+  const reveal = (p: string) => fetch(`${base}/api/nodes/reveal`, { method: "POST", body: JSON.stringify({ path: p }), headers: { origin: base } });
+  assert.equal((await reveal(path.join(outside, "secret.md"))).status, 400);
   // No vault is set in the test root, so a copy is refused before anything is written.
   const copy = await fetch(`${base}/api/nodes/copy`, { method: "POST", body: JSON.stringify({ path: path.join(docs, "plan.md") }), headers: { origin: base } });
   assert.equal(copy.status, 409);
@@ -133,6 +135,8 @@ test("dispatch returns at once and keeps a failed job for retry until dismissed"
   await post("retry", { id: job.id });
   await new Promise((r) => setTimeout(r, 50));
   assert.ok((await jobs()).find((j: any) => j.id === job.id).error);
+  // Only a job waiting on a choice can be chosen.
+  assert.match((await post("choose", { id: job.id, index: 0 })).error, /no such choice/);
   await post("dismiss", { id: job.id });
   assert.equal((await jobs()).length, 0);
 });

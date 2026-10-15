@@ -188,7 +188,7 @@ A TypeScript CLI. `npm i -g @tracedelange/orca` (or `npm link` in a checkout) pu
 | `orca tree` | Prints the tree with the sessions of each node. |
 | `orca check` | Finds parse errors, missing titles, frontmatter goals, and oversized organizational nodes. It exits with 1 on errors, not on warnings. |
 | `orca launch <path> [--resume] [--host]` | Starts Claude in tmux for a node. `--resume` opens the last conversation of the node. `--host` starts it on a worker. |
-| `orca dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. |
+| `orca dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. If Haiku is not sure, it lists the choices and stops. |
 | `orca queue <path> ["<task>"]` | Adds a task to the queue of the node. Without a task, it prints the queue. |
 | `orca end <tmux-name or session-id>` | Ends a session on the hub or on a worker. |
 | `orca claim <path>` or `--auto "<text>" [--scope]` | Attaches the current Claude session to a node. The `/orca` skill runs it. |
@@ -215,9 +215,9 @@ Endpoints:
 | `GET /api/tree` | The whole tree as JSON. For each node: path, title, goal, repos, branch, extra fields, issues, child count, descendant count, sessions, and children. No bodies. Worker sessions are on their nodes. |
 | `GET /api/node?path=<path>` | One node: fields, sessions, the raw body, the rendered HTML body, and the absolute path of its `CLAUDE.md`. |
 | `GET /api/workers` | Each worker with host, name, and the last poll error, if there is one. |
-| `GET /api/dispatches` | Dispatches that Haiku is still placing, and failed dispatches with their error. The list is kept in memory. |
+| `GET /api/dispatches` | Dispatches that Haiku is still placing, dispatches waiting for the user to pick a place (`choices`), and failed dispatches with their error. The list is kept in memory. |
 | `POST /api/launch?path=&resume=&host=` | Starts a session. |
-| `POST /api/nodes/<op>` | `create`, `update`, `move`, `remove`, `end`, `adopt`, `dispatch`, `retry`, or `dismiss`. Each takes a JSON body. `dispatch` returns a job immediately and does the placement in the background. |
+| `POST /api/nodes/<op>` | `create`, `update`, `move`, `remove`, `end`, `adopt`, `dispatch`, `retry`, `choose`, or `dismiss`. Each takes a JSON body. `dispatch` returns a job immediately and does the placement in the background. If Haiku is not sure, the job gets 2 or 3 `choices` and waits. `choose` (`{ id, index }`) files it at one of them. |
 | WebSocket `/api/term?session=&host=` | A terminal bridge. It runs `tmux attach` in a pty on the hub, or `ssh -t <host> tmux attach` for a worker. |
 
 Security rules:

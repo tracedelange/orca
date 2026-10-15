@@ -20,7 +20,7 @@ import { flatten, nodeContext, readTree, type TreeNode } from "./tree.ts";
 export const PARALLEL = 2;
 const ITEM = /^- \[([ >x!])\] (.+?)(?: → (\S+))?(?: — (.+))?$/;
 
-type Item = { mark: string; text: string; child?: string };
+type Item = { mark: string; text: string; child?: string; note?: string }; // note: the failure reason, or the Result line
 
 function section(lines: string[]): [number, number] | undefined {
   const start = lines.findIndex((l) => /^##\s+Queue\s*$/i.test(l));
@@ -33,9 +33,9 @@ export function queueItems(text: string): Item[] {
   const lines = text.split("\n");
   const range = section(lines);
   if (!range) return [];
-  return lines.slice(range[0] + 1, range[1]).flatMap((l) => {
+  return lines.slice(range[0] + 1, range[1]).flatMap((l, i, all) => {
     const m = l.match(ITEM);
-    return m ? [{ mark: m[1], text: m[2], child: m[3] }] : [];
+    return m ? [{ mark: m[1], text: m[2], child: m[3], note: m[4] ?? all[i + 1]?.match(/^\s+Result: (.+)$/)?.[1] }] : [];
   });
 }
 

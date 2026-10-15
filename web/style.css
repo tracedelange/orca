@@ -155,6 +155,20 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 #map:active { cursor: grabbing; }
 .links line { stroke: var(--ink-3); stroke-width: 1; }
 
+/* Map motion: stars behind the graph, flow on top of the links. Both ignore the pointer. */
+.stars, .flow { pointer-events: none; }
+.stars circle { fill: var(--ink-2); }
+.stars .far circle { opacity: 0.35; }
+.stars .near circle { opacity: 0.6; }
+.stars .tw { animation: twinkle 5s ease-in-out infinite alternate; }
+@keyframes twinkle { to { opacity: 0.08; } }
+.flow line { stroke: var(--ink-3); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 0 26; animation: flow calc(4s / var(--flow-speed, 1)) linear infinite; }
+.flow line.working { stroke: var(--ink-2); stroke-width: 3; animation-duration: calc(1.6s / var(--flow-speed, 1)); }
+.flow line.needs { stroke: var(--accent); }
+@keyframes flow { to { stroke-dashoffset: -26; } }
+.still .stars, .still .flow { display: none; }
+@media (prefers-reduced-motion: reduce) { .stars .tw, .flow line { animation: none; } }
+
 .rim {
   fill: var(--paper);
   stroke: var(--ink-2);
@@ -309,6 +323,9 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail li button.a-new { border-left-color: var(--accent); }
 #rail li button.a-failed { border-left-color: var(--accent); }
 #rail .a-failed .mark, #rail .a-failed .st { color: var(--accent); }
+#rail li button.a-choose { border-left-color: var(--accent); }
+#rail .a-choose .mark, #rail .a-choose .st { color: var(--accent); }
+#rail li button.choice { padding-left: 30px; }
 #rail .a-placing .mark { animation: placing 1.2s ease-in-out infinite; }
 @keyframes placing { 50% { opacity: 0.3; } }
 #rail li button { min-width: 0; }
@@ -411,6 +428,10 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #settingsdlg .card :is(input, select) { background: var(--paper-2); }
 #settingsdlg .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 16px; border-top: 1px solid var(--ink-3); }
 #settingsdlg .fields[hidden] { display: none; }
+#settingsdlg .knobs { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--ink-3); }
+#settingsdlg .knobs[hidden] { display: none; }
+#settingsdlg .knobs label { display: grid; grid-template-columns: 90px 1fr; align-items: center; font: 13px var(--sans); color: var(--ink-2); }
+#settingsdlg .knobs input { accent-color: var(--ink); background: none; }
 /* A square switch, to match the square buttons. */
 #settingsdlg .form .switch { position: relative; display: block; flex: none; width: 36px; height: 20px; cursor: pointer; }
 #settingsdlg .form .switch input { position: absolute; inset: 0; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
@@ -496,3 +517,19 @@ a.button { display: inline-block; text-decoration: none; }
 .md code { font: 13px var(--mono); }
 .md pre { font: 12px/1.5 var(--mono); padding: 12px; border: 1px solid var(--ink-3); overflow-x: auto; }
 .md a { color: var(--ink); }
+#dispatcher .parent { margin: 0 0 10px; font: 12px var(--sans); color: var(--ink-2); }
+#dispatcher .parent b { font-weight: 500; color: var(--ink); }
+#dispatcher .parent .unparent { padding: 0 6px; margin-left: 4px; line-height: 16px; }
+#panel .queue { margin: 0 0 22px; }
+#panel .queue ol { list-style: none; margin: 0; padding: 0; }
+#panel .queue li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--rule); font: 13px var(--sans); }
+#panel .queue .mark { width: 12px; flex: none; color: var(--ink-3); }
+#panel .queue .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#panel .queue .note { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-3); }
+#panel .queue .st { font-size: 11px; color: var(--ink-3); }
+#panel .queue .child { padding: 2px 6px; font-size: 10px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#panel .queue .j-running .mark, #panel .queue .j-running .st { color: var(--ink); }
+#panel .queue .j-failed .mark, #panel .queue .j-failed .st, #panel .queue .j-failed .note { color: var(--accent); }
+#panel .queue .j-done .text { color: var(--ink-2); }
+#panel .queue .qadd { display: flex; gap: 8px; margin-top: 10px; }
+#panel .queue .qadd input { flex: 1; min-width: 0; }

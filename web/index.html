@@ -51,9 +51,10 @@
 
   <aside id="panel" hidden></aside>
 
-  <!-- Dispatch: ⌘K from anywhere. Haiku places the task in the whole tree. -->
+  <!-- Dispatch: ⌘K from anywhere. Haiku places the task under the parent, or in the whole tree once the parent is dismissed. -->
   <dialog id="dispatcher">
     <form class="form">
+      <p class="parent" hidden>Under <b></b> <button class="unparent" type="button" title="Place it anywhere in the tree">×</button></p>
       <label><span>What needs doing?</span><textarea name="prompt" rows="6" required placeholder="Plain instructions. Orca files it into the tree and starts Claude on it."></textarea></label>
       <div class="row"><button type="submit">Dispatch</button><button class="cancel" type="button">Cancel</button><span class="where-slot"></span><span class="hint">⌘↵</span></div>
       <p class="err" hidden></p>
@@ -106,6 +107,17 @@
           <div><b>Group idle nodes</b><p>Children quiet for longer than this share one "others" node on the map. Saved in this browser.</p></div>
           <label class="inline"><input name="idle" type="number" min="1" required><span>min</span></label>
         </div>
+        <div class="card">
+          <div class="setting">
+            <div><b>Map motion</b><p>Stars drift behind the map, and dots run down links to sessions. Saved in this browser.</p></div>
+            <label class="switch" title="Animate the map"><input name="motion" type="checkbox"><i></i></label>
+          </div>
+          <div class="knobs">
+            <label><span>Stars</span><input name="density" type="range" min="0" max="3" step="0.25"></label>
+            <label><span>Parallax</span><input name="parallax" type="range" min="0" max="3" step="0.25"></label>
+            <label><span>Flow speed</span><input name="flow" type="range" min="0.25" max="3" step="0.25"></label>
+          </div>
+        </div>
       </section>
       <section class="pane" data-pane="integrations" hidden>
         <div class="card">
@@ -135,7 +147,7 @@
     <div class="split">
       <div id="term"></div>
       <article id="doc" hidden>
-        <div class="top"><code class="where"></code><span><button class="copyobs" type="button" hidden>Copy to Obsidian</button> <button class="popout" type="button">Open in app</button> <button class="close" type="button">Close</button></span></div>
+        <div class="top"><code class="where"></code><span><button class="copyobs" type="button" hidden>Copy to Obsidian</button> <button class="reveal" type="button">Show in Finder</button> <button class="popout" type="button">Open in app</button> <button class="close" type="button">Close</button></span></div>
         <div class="md"></div>
       </article>
     </div>

@@ -7,6 +7,7 @@ const STATE_MARK = { needs: "◆", new: "◉", working: "●", ready: "○", idl
 const svg = d3.select("#map");
 const gView = svg.append("g");                       // pan and zoom apply here
 const gLinks = gView.append("g").attr("class", "links");
+const gFlow = gView.append("g").attr("class", "flow");     // dots running down links to sessions
 const gNodes = gView.append("g");
 const crumbs = document.getElementById("crumbs");
 const panel = document.getElementById("panel");
@@ -38,6 +39,16 @@ const revealed = new Set(); // sessionIds whose node has been unpacked onto the 
 let showArchived = readFlag("orca.showArchived");
 let obsidian = null; // { vault, folder } once the user opts in to copying documents there
 let idleMinutes = 30; // children quiet for longer than this share one "others" node
+let motion = !readFlag("orca.still"); // starfield and link flow on the map
+document.body.classList.toggle("still", !motion);
+// Map motion knobs, as multiples of the defaults. Saved in this browser.
+const knobs = {};
+const readKnobs = () => {
+  Object.assign(knobs, { density: 1, parallax: 1, flow: 1 });
+  try { Object.assign(knobs, JSON.parse(localStorage.getItem("orca.motionKnobs"))); } catch {}
+};
+readKnobs();
+document.body.style.setProperty("--flow-speed", knobs.flow);
 try { idleMinutes = Number(localStorage.getItem("orca.idleMinutes")) || 30; } catch {}
 const opened = new Set(); // parents whose "others" node was clicked; packing the parent groups them again
 const archivedButton = document.getElementById("archived");
@@ -253,10 +264,49 @@ const zoom = d3.zoom()
   })
   .on("zoom", (e) => {
     gView.attr("transform", e.transform);
+    panStars(e.transform);
     if (e.sourceEvent?.type?.endsWith("move")) samples.push({ t: e.sourceEvent.timeStamp, x: e.transform.x, y: e.transform.y });
   })
   .on("end", (e) => e.sourceEvent && glide());
 svg.call(zoom);
+
+// ---- Starfield ----
+
+// Two layers of stars behind the map. Each repeats every TILE px and pans at a fraction of the map's speed, for depth.
+const TILE = 512;
+const gStars = svg.insert("g", ":first-child").attr("class", "stars");
+const starLayers = [
+  { name: "far", speed: 0.08, count: 40, size: [0.5, 1] },
+  { name: "near", speed: 0.2, count: 12, size: [0.9, 1.6] },
+].map((l) => ({
+  ...l,
+  g: gStars.append("g").attr("class", l.name),
+  tile: d3.range(l.count * 3).map(() => ({ x: Math.random() * TILE, y: Math.random() * TILE, r: l.size[0] + Math.random() * (l.size[1] - l.size[0]) })),
+}));
+
+function drawStars() {
+  const tiles = d3.cross(d3.range(Math.ceil(innerWidth / TILE) + 1), d3.range(Math.ceil(innerHeight / TILE) + 1));
+  for (const l of starLayers) {
+    l.g.selectAll("circle")
+      .data(tiles.flatMap(([i, j]) => l.tile.slice(0, Math.round(l.count * knobs.density)).map((s) => ({ ...s, x: s.x + i * TILE, y: s.y + j * TILE }))))
+      .join("circle")
+      .attr("cx", (s) => s.x).attr("cy", (s) => s.y).attr("r", (s) => s.r)
+      // About a third twinkle, each on its own clock.
+      .classed("tw", () => Math.random() < 0.3)
+      .style("animation-duration", () => `${3 + Math.random() * 5}s`)
+      .style("animation-delay", () => `${-Math.random() * 8}s`);
+  }
+  panStars(d3.zoomTransform(svg.node()));
+}
+
+function panStars(t) {
+  for (const l of starLayers) {
+    const off = (v) => ((((v * l.speed * knobs.parallax) % TILE) + TILE) % TILE) - TILE;
+    l.g.attr("transform", `translate(${off(t.x)},${off(t.y)})`);
+  }
+}
+drawStars();
+addEventListener("resize", drawStars);
 
 let samples = [];  // recent pan positions, to measure release speed
 let glider = null; // d3.timer for the coast after a pan
@@ -425,6 +475,10 @@ function render() {
         .select(".body").attr("transform", "scale(0.25)")),
     )
     .call(fill, t);
+  gFlow.selectAll("line")
+    .data(links.filter((l) => sessionsIn(l.target.d).length), (l) => l.target.path)
+    .join("line")
+    .attr("class", (l) => mostUrgent(sessionsIn(l.target.d)));
   ticked();
   renderCrumbs();
 }
@@ -521,6 +575,9 @@ function ticked() {
   gLinks.selectAll("line:not(.leaving)")
     .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
     .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
+  gFlow.selectAll("line")
+    .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
+    .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
 }
 
 // The free space between the rail and the panel.
@@ -593,19 +650,24 @@ function railRow(s) {
 }
 
 function jobRow(j) {
-  const st = j.error ? "failed" : "placing";
+  const st = j.error ? "failed" : j.choices ? "choose" : "placing";
+  const label = { failed: "failed · retry", choose: "where?", placing: "placing" }[st];
   return `<li><button type="button" class="end" data-dismiss="${esc(j.id)}" title="Dismiss">Dismiss</button><button type="button" class="a-${st}"${j.error ? ` data-retry="${esc(j.id)}" title="Retry"` : ""}>
-    <span class="line"><span class="mark">${j.error ? "!" : "…"}</span><span class="name">${esc(j.prompt.trim().split("\n")[0])}</span><span class="st">${j.error ? "failed · retry" : "placing"}</span></span>
+    <span class="line"><span class="mark">${j.error ? "!" : j.choices ? "?" : "…"}</span><span class="name">${esc(j.prompt.trim().split("\n")[0])}</span><span class="st">${label}</span></span>
     ${j.error ? `<span class="sum">${esc(j.error)}</span>` : ""}
     <span class="meta">${j.host ? `${esc(j.host)} · ` : ""}${ago(j.startedAt)}</span>
-  </button></li>`;
+  </button>${(j.choices ?? []).map((c, i) => `<button type="button" class="choice" data-choose="${esc(j.id)}" data-index="${i}" title="File it here">
+    <span class="line"><span class="mark">${i + 1}</span><span class="name">${esc(c.title)}</span></span>
+    <span class="meta">${esc(c.path || "/")}</span>
+  </button>`).join("")}</li>`;
 }
 
 rail.addEventListener("click", async (e) => {
-  const job = e.target.closest("[data-retry], [data-dismiss]");
+  const job = e.target.closest("[data-retry], [data-dismiss], [data-choose]");
   if (job) {
-    const { retry, dismiss } = job.dataset;
-    await post(retry ? "retry" : "dismiss", { id: retry ?? dismiss }).catch(() => {});
+    const { retry, dismiss, choose, index } = job.dataset;
+    if (choose) await post("choose", { id: choose, index: Number(index) }).catch(() => {});
+    else await post(retry ? "retry" : "dismiss", { id: retry ?? dismiss }).catch(() => {});
     return load();
   }
   const endButton = e.target.closest("[data-end]");
@@ -695,6 +757,9 @@ async function refreshPanel() {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function renderPanel(n) {
+  // Polling redraws the panel as jobs move; keep a half-typed job.
+  const draft = panel.querySelector(".qadd input");
+  const typed = draft && { value: draft.value, focused: document.activeElement === draft };
   panelNode = n;
   panelFile = n.file;
   const rows = [
@@ -713,19 +778,47 @@ function renderPanel(n) {
     <div class="actions">
       <button data-form="edit" type="button">Edit</button>
       <button data-form="child" type="button">Add child</button>
-      <button data-form="queue" type="button">Queue</button>
       ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
       ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
     </div>
     <form class="form" hidden></form>
     ${renderSessions(n.sessions)}
+    ${renderQueue(n.queue)}
     ${renderDocs(n.docs)}
     ${n.issues.length ? `<ul class="issues">${n.issues.map((i) => `<li>${esc(i.level)}: ${esc(i.message)}</li>`).join("")}</ul>` : ""}
     <div class="md">${n.html}</div>`;
-  // The goal already shows under the title; drop its body section.
-  const h = [...panel.querySelectorAll(".md h2")].find((el) => el.textContent.trim().toLowerCase() === "goal");
-  while (h?.nextElementSibling && !/^H[1-6]$/.test(h.nextElementSibling.tagName)) h.nextElementSibling.remove();
-  h?.remove();
+  // The goal shows under the title and the queue has its own section; drop their body sections.
+  for (const h of [...panel.querySelectorAll(".md h2")].filter((el) => ["goal", "queue"].includes(el.textContent.trim().toLowerCase()))) {
+    while (h.nextElementSibling && !/^H[1-6]$/.test(h.nextElementSibling.tagName)) h.nextElementSibling.remove();
+    h.remove();
+  }
+  if (typed) {
+    const input = panel.querySelector(".qadd input");
+    input.value = typed.value;
+    if (typed.focused) input.focus();
+  }
+}
+
+// The node's ## Queue checklist as jobs: each line's mark is its state.
+const JOB = { " ": ["waiting", "○"], ">": ["running", "●"], x: ["done", "✓"], "!": ["failed", "!"] };
+
+function renderQueue(items) {
+  const count = (st) => items.filter((i) => JOB[i.mark][0] === st).length;
+  const tally = ["running", "waiting", "failed"].map((st) => count(st) && `${count(st)} ${st}`).filter(Boolean).join(" · ");
+  const rows = items.map((i) => {
+    const [st, mark] = JOB[i.mark];
+    return `<li class="j-${st}">
+      <span class="mark">${mark}</span>
+      <span class="text">${esc(i.text)}${i.note ? `<span class="note">${esc(i.note)}</span>` : ""}</span>
+      <span class="st">${st}</span>
+      ${i.child ? `<button class="child" type="button" data-reveal="${esc(i.child)}" title="${esc(i.child)}">${esc(i.child.split("/").pop())}</button>` : ""}
+    </li>`;
+  });
+  return `<section class="queue">
+    <div class="sec-head"><span>Queue${tally ? ` · ${tally}` : ""}</span></div>
+    ${rows.length ? `<ol>${rows.join("")}</ol>` : ""}
+    <form class="qadd"><input name="task" placeholder="Add a job. A background worker picks it up." autocomplete="off" required><button type="submit">Add</button></form>
+  </section>`;
 }
 
 function renderSessions(sessions) {
@@ -852,9 +945,6 @@ const FORMS = {
     ${field("New path", `<input name="to" value="${esc(n.path)}" required>`)}
     <p class="hint">Change the last part to rename. Change the rest to move it under another node.</p>
     <div class="row"><button type="submit">Move</button><button class="cancel" type="button">Cancel</button></div>`,
-  queue: (n) => `
-    ${field(`Tasks for ${esc(n.title)}, one per line`, `<textarea name="tasks" rows="6" required placeholder="Each line becomes a background worker. Orca merges its work and checks it off in the ## Queue section."></textarea>`)}
-    <div class="row"><button type="submit">Queue</button><button class="cancel" type="button">Cancel</button><span class="hint">⌘↵</span></div>`,
   remove: (n) => `
     <p class="hint">Moves ${esc(n.path)} and everything under it to <code>.trash</code> in the node root.</p>
     <div class="row"><button class="danger" type="submit">Delete</button><button class="cancel" type="button">Cancel</button></div>`,
@@ -896,8 +986,6 @@ async function submitForm(form) {
       await post("create", { path: n.path ? `${n.path}/${v.name}` : v.name, title: v.title, goal: v.goal });
       if (n.path !== graphRoot.data.path) expanded.add(n.path); // unpack the parent so the new child shows
       writeExpanded();
-    } else if (kind === "queue") {
-      for (const task of v.tasks.split("\n").filter((t) => t.trim())) await post("queue", { path: n.path, task });
     } else if (kind === "move") {
       const to = (await post("move", { from: n.path, to: v.to.replace(/^\/+|\/+$/g, "") })).path;
       expanded = new Set([...expanded].map((p) => rebase(p, n.path, to)));
@@ -922,13 +1010,26 @@ async function submitForm(form) {
 }
 
 // Placement takes a few seconds (a Haiku call), so it runs on the server and shows in the rail until the session starts.
-// ---- Dispatch: one dialog over everything; Haiku picks the node from the whole tree ----
+// ---- Dispatch: one dialog over everything; Haiku picks the node under the parent ----
 
 const dispatcher = document.getElementById("dispatcher");
 const dispatchForm = dispatcher.querySelector("form");
+const parentLine = dispatchForm.querySelector(".parent");
+let dispatchScope = ""; // the parent: the node in view, until dismissed
+function setScope(p) {
+  dispatchScope = p;
+  parentLine.hidden = !p;
+  parentLine.querySelector("b").textContent = byPath.get(p)?.data.title ?? p;
+  parentLine.querySelector("b").title = p;
+}
+parentLine.querySelector(".unparent").addEventListener("click", () => {
+  setScope("");
+  dispatchForm.prompt.focus();
+});
 function openDispatch() {
   if (dispatcher.open) return;
   dispatchForm.reset();
+  setScope(selected ?? graphRoot?.data.path ?? "");
   dispatchForm.querySelector(".where-slot").innerHTML = whereSelect();
   dispatchForm.querySelector(".err").hidden = true;
   dispatcher.showModal();
@@ -1067,6 +1168,9 @@ setting("obsidian").addEventListener("change", showObsidianFields);
 
 document.getElementById("settings").addEventListener("click", async () => {
   setting("idle").value = idleMinutes;
+  setting("motion").checked = motion;
+  for (const k in knobs) setting(k).value = knobs[k];
+  showKnobs();
   const o = await loadObsidian();
   const name = (p) => p.split("/").pop();
   setting("vault").innerHTML = o.vaults.map((v) => `<option value="${esc(v)}"${v === o.obsidian?.vault ? " selected" : ""}>${esc(name(v))}</option>`).join("");
@@ -1082,10 +1186,26 @@ document.getElementById("settings").addEventListener("click", async () => {
   settings.returnValue = "";
   settings.showModal();
 });
+const showKnobs = () => (settings.querySelector(".knobs").hidden = !setting("motion").checked);
+setting("motion").addEventListener("change", showKnobs);
+// The map follows the knobs while you drag them; Cancel puts back the saved values.
+function applyKnobs() {
+  document.body.style.setProperty("--flow-speed", knobs.flow);
+  drawStars();
+}
+settings.querySelector(".knobs").addEventListener("input", (e) => {
+  knobs[e.target.name] = Number(e.target.value);
+  applyKnobs();
+});
+
 settings.addEventListener("close", async () => {
-  if (settings.returnValue !== "save") return;
+  if (settings.returnValue !== "save") return readKnobs(), applyKnobs();
+  try { localStorage.setItem("orca.motionKnobs", JSON.stringify(knobs)); } catch {}
   idleMinutes = Number(setting("idle").value);
   try { localStorage.setItem("orca.idleMinutes", idleMinutes); } catch {}
+  motion = setting("motion").checked;
+  document.body.classList.toggle("still", !motion);
+  try { localStorage.setItem("orca.still", motion ? "0" : "1"); } catch {}
   render();
   try {
     const vault = setting("obsidian").checked ? setting("vault").value : "";
@@ -1099,11 +1219,12 @@ settings.addEventListener("close", async () => {
 });
 dispatchForm.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) dispatchForm.requestSubmit();
+  if (e.key === "Backspace" && e.target === dispatchForm.prompt && !e.target.value && dispatchScope) setScope("");
 });
 dispatchForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await post("dispatch", { path: "", prompt: dispatchForm.prompt.value, host: dispatchForm.host?.value });
+    await post("dispatch", { path: dispatchScope, prompt: dispatchForm.prompt.value, host: dispatchForm.host?.value });
     dispatcher.close();
     load();
   } catch (err) {
@@ -1117,9 +1238,13 @@ panel.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && e.target.form) e.target.form.requestSubmit();
 });
 
-panel.addEventListener("submit", (e) => {
+panel.addEventListener("submit", async (e) => {
   e.preventDefault();
-  submitForm(e.target);
+  if (!e.target.matches(".qadd")) return submitForm(e.target);
+  const input = e.target.task;
+  await post("queue", { path: selected, task: input.value }).catch((err) => alertInPanel(err.message));
+  input.value = "";
+  refreshPanel();
 });
 
 // ---- Terminal ----
@@ -1278,9 +1403,10 @@ async function openDoc(file) {
   docview.scrollTop = 0;
 }
 
-// Opens the file on the Mac that runs the server, in the default app for .md files.
-function popout(button, file) {
-  post("open", { path: file }).catch((err) => {
+// Acts on the file on the Mac that runs the server: "open" uses the default app for .md files,
+// "reveal" selects it in Finder.
+function popout(button, file, op = "open") {
+  post(op, { path: file }).catch((err) => {
     button.textContent = "Can't open";
     button.title = err.message;
   });
@@ -1303,6 +1429,7 @@ function copyToObsidian(button, file) {
 
 docview.querySelector(".copyobs").addEventListener("click", (e) => copyToObsidian(e.target, docview.querySelector(".where").textContent));
 docview.querySelector(".popout").addEventListener("click", (e) => popout(e.target, docview.querySelector(".where").textContent));
+docview.querySelector(".reveal").addEventListener("click", (e) => popout(e.target, docview.querySelector(".where").textContent, "reveal"));
 
 docview.querySelector(".close").addEventListener("click", () => {
   docview.hidden = true;
@@ -1335,6 +1462,11 @@ panel.addEventListener("click", (e) => {
   if (attach) openTerminal(attach.dataset.tmux, selected, attach.dataset.host || undefined);
   const archive = e.target.closest("[data-archive]");
   if (archive) setArchived(selected, !!archive.dataset.archive);
+  const job = e.target.closest("[data-reveal]");
+  if (job) {
+    reveal(job.dataset.reveal);
+    select(job.dataset.reveal);
+  }
   const rootButton = e.target.closest("[data-root]");
   if (rootButton) setRoot(rootButton.dataset.root);
   const copy = e.target.closest(".copy");

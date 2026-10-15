@@ -3,6 +3,7 @@ import path from "node:path";
 import { Marked } from "marked";
 import { parseNode, type NodeFields } from "./node.ts";
 import { expandHome, isInside, PathError, resolveInRoot } from "./paths.ts";
+import { queueItems } from "./queue.ts";
 import { lastSessionFile, readSessions, splitRepo, type Session } from "./sessions.ts";
 import type { WorkerState } from "./workers.ts";
 
@@ -45,6 +46,7 @@ export function readNodeDetail(root: string, rel: string) {
     ...fields,
     sessions: readSessions(dir),
     docs: listDocs(dir),
+    queue: queueItems(body),
     body,
     html: toHtml(body),
   };
