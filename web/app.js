@@ -123,7 +123,7 @@ function markSeen(sessions) {
 // A finished turn you have not opened since it finished.
 const isNew = (s) => s.state === "ready" && !!s.finishedAt && s.finishedAt > (seen[s.sessionId] ?? "");
 const sessionState = (s) => (s.state === "needs-input" ? "needs" : isNew(s) ? "new" : s.state);
-const withNode = (x) => x.data.sessions.map((s) => ({ ...s, path: x.data.path, title: x.data.title, background: x.data.background }));
+const withNode = (x) => x.data.sessions.map((s) => ({ ...s, path: x.data.path, title: x.data.title, background: x.data.background, parent: x.data.parent }));
 const sessionsIn = (d) => d.descendants().flatMap(withNode);
 const mostUrgent = (sessions) => STATES.find((st) => sessions.some((s) => sessionState(s) === st)) ?? "idle";
 
@@ -617,8 +617,10 @@ function relayout(duration) {
 
 // ---- Rail: every session under the root, most urgent first ----
 
-// Queue workers stay off the rail unless they are blocked on you.
-const railSessions = () => sessionsIn(graphRoot).filter((s) => !s.background || sessionState(s) === "needs");
+// Queue workers stay off the rail unless they are blocked on you. A dispatched child stays off while
+// a session runs on its parent node, which answers it; once the parent is gone, the child comes back.
+const parentLive = (s) => !!byPath.get(s.parent)?.data.sessions.length;
+const railSessions = () => sessionsIn(graphRoot).filter((s) => !(s.parent && parentLive(s)) && (!s.background || sessionState(s) === "needs"));
 
 function renderRail() {
   if (!graphRoot) return;
@@ -993,9 +995,11 @@ async function submitForm(form) {
       await post("update", { path: n.path, ...v });
     } else if (kind === "child") {
       const name = v.name || slug(v.title);
-      await post("create", { path: n.path ? `${n.path}/${name}` : name, title: v.title, goal: v.goal });
+      const path = n.path ? `${n.path}/${name}` : name;
+      await post("create", { path, title: v.title, goal: v.goal });
       if (n.path !== graphRoot.data.path) expanded.add(n.path); // unpack the parent so the new child shows
       writeExpanded();
+      selected = path; // a new node is idle; selecting it keeps it out of "N others"
     } else if (kind === "move") {
       const to = (await post("move", { from: n.path, to: v.to.replace(/^\/+|\/+$/g, "") })).path;
       expanded = new Set([...expanded].map((p) => rebase(p, n.path, to)));
@@ -1063,6 +1067,7 @@ quickAdd.addEventListener("submit", async (e) => {
   quickInput.blur();
   if (parent !== graphRoot.data.path) expanded.add(parent); // unpack the parent so the new child shows
   writeExpanded();
+  selected = path; // a new node is idle; selecting it before the redraw keeps it out of "N others"
   await load();
   select(path);
 });
