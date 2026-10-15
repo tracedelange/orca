@@ -1,0 +1,15 @@
+#!/bin/sh
+# A stand-in for ssh in tests: logs each call to $FAKE_SSH_LOG and answers like a worker would.
+for last; do :; done
+for host; do case "$host" in -*|BatchMode*|ConnectTimeout*|ControlMaster*|ControlPath*|ControlPersist*) ;; *) break ;; esac; done
+# Only these calls send input; reading stdin on the others would wait on a pipe nobody closes.
+# The tar stream is binary, so it is read but not logged.
+case "$last" in *launch.mjs*) input=$(cat) ;; *tar*) cat > /dev/null; input= ;; *) input= ;; esac
+printf '%s\t%s\t%s\n' "$host" "$last" "$input" >> "$FAKE_SSH_LOG"
+[ "$host" = down ] && { echo "ssh: connect to host down: Connection refused" >&2; exit 255; }
+case "$last" in
+  *"install.mjs --remove"*) ;;
+  *install.mjs*) echo "box" ;;
+  *list.mjs*) echo '{"home":"/home/box","sessions":[{"sessionId":"r1","pid":7,"cwd":"/home/box/orca/work","tmux":"orca-work","state":"working","updatedAt":"2026-10-15T10:00:00Z","node":"work"}]}' ;;
+  *launch.mjs*) echo "orca-work" ;;
+esac
