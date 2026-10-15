@@ -9,15 +9,15 @@
 
 <p align="center">Graph based agentic session management harness designed to protect your attention</p>
 
+<p align="center">
+  <a href="https://github.com/tracedelange/orca/actions/workflows/ci.yml"><img src="https://github.com/tracedelange/orca/actions/workflows/ci.yml/badge.svg" alt="Tests"></a>
+  <a href="https://codecov.io/gh/tracedelange/orca"><img src="https://codecov.io/gh/tracedelange/orca/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://www.npmjs.com/package/@tdelange/orca"><img src="https://img.shields.io/npm/v/@tdelange/orca" alt="npm version"></a>
+</p>
+
+<p align="center"><img src="media/nodes.gif" width="720" alt="The orca map: the session rail on the left, the node tree in the middle"></p>
+
 ---
-
-## Why Orca
-
-In the [8 Levels of AI Assisted Development article](https://www.augmentcode.com/guides/steve-yegge-8-levels-ai-assisted-development), the 8th level is defined as the creation of a custom orchestrator. This is my response. 
-
-AI-driven-development has led to a new stage of software hyper-customizability. Naturally, given each individual has a unique perspective on how the world works and how they work in that world, each individual can now have tools designed to perfectly fit their preferred method of work. Orca is my attempt at creating just such a tool for my own AI-Driven Development tasks. 
-
-The vision for this project is a harness that's better at managing your most valuable resource: Your attention. Simply, it'a graph view tied to claude session management. This should look familiar to Obsidian users. The thesis behind the project is not to burn more tokens faster, but to treat your awareness / attention like you're the executive of your workflow, because you are!
 
 Orca keeps your work as a tree of **nodes**: one folder for each area, project, or task. Each Claude Code session attaches to a node. The viewer shows the tree as a live map. A node that needs you is easy to see, and the rail lists every session from most urgent to least urgent.
 
@@ -28,6 +28,14 @@ Orca adds no database and no new file format:
 - You can edit the tree with your editor, with `git`, or with the `orca` CLI.
 
 See `design.md` for the full specification.
+
+## Why Orca
+
+In the [8 Levels of AI Assisted Development article](https://www.augmentcode.com/guides/steve-yegge-8-levels-ai-assisted-development), the 8th level is defined as the creation of a custom orchestrator. This is my response. 
+
+AI-driven-development has led to a new stage of software hyper-customizability. Naturally, given each individual has a unique perspective on how the world works and how they work in that world, each individual can now have tools designed to perfectly fit their preferred method of work. Orca is my attempt at creating just such a tool for my own AI-Driven Development tasks. 
+
+The vision for this project is a harness that's better at managing your most valuable resource: Your attention. Simply, it'a graph view tied to claude session management. This should look familiar to Obsidian users. The thesis behind the project is not to burn more tokens faster, but to treat your awareness / attention like you're the executive of your workflow, because you are!
 
 ## How it works
 
@@ -186,6 +194,8 @@ orca dispatch work "..." --host my-worker
 - A session stays in the rail while its Claude process runs. End (on hover in the rail, or in the panel) stops it. A working session needs a second click. The conversation stays on disk, and Resume in the panel opens it again.
 
 ### Terminals
+
+<p align="center"><img src="media/terminal-view.png" width="720" alt="The terminal view: the session rail on the left and a live Claude Code session on the right"></p>
 
 - When you open a terminal, the viewer goes into terminal mode. The session fills the space to the right of the rail, and a click in the rail changes the session.
 - Esc goes back to the map, on the node of that session. Shift+Esc sends Escape to Claude. ⌘. changes between the map and the last terminal.
