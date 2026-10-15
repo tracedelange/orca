@@ -1736,17 +1736,27 @@ addEventListener("keydown", (e) => {
 // ---- Plan usage ----
 
 // Same windows as the Hammerspoon panel: 5h counts down to its reset, the week names the reset day.
+// The tailnet leads the usage card. "Running" shows its name; anything else shows the state, in the accent.
+const net = document.createElement("span");
+async function loadTailnet() {
+  const t = await fetch("/api/tailnet").then((r) => r.json()).catch(() => ({ state: "unavailable" }));
+  const up = t.state === "Running";
+  net.className = up ? "" : "hot";
+  net.title = t.login ? `Tailscale: ${t.login}` : "Tailscale";
+  net.innerHTML = `<b>tailnet</b>${esc(up ? t.tailnet ?? "?" : t.state.toLowerCase())}`;
+}
+
 async function loadUsage() {
   const el = document.getElementById("usage");
   const u = await fetch("/api/usage").then((r) => r.json()).catch(() => ({ error: "unavailable" }));
-  if (u.error) return (el.textContent = `usage ${u.error}`);
+  if (u.error) return el.replaceChildren(net, `usage ${u.error}`);
   const left = (t) => {
     const m = Math.max(0, Math.round((new Date(t) - Date.now()) / 60000));
     return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
   };
   const day = (t) => new Date(t).toLocaleString([], { weekday: "short", hour: "numeric" });
   const who = Object.assign(document.createElement("span"), { className: "who", textContent: u.email ?? "not logged in" });
-  el.replaceChildren(who, ...[["5h", u.five_hour, left], ["wk", u.seven_day, day]].filter(([, w]) => w).map(([label, w, when]) => {
+  el.replaceChildren(net, who, ...[["5h", u.five_hour, left], ["wk", u.seven_day, day]].filter(([, w]) => w).map(([label, w, when]) => {
     const pct = Math.round(w.utilization);
     const row = document.createElement("span");
     row.className = pct >= 80 ? "hot" : "";
@@ -1760,5 +1770,5 @@ if (!location.hash && storedRoot() !== null) history.replaceState(null, "", hash
 centerView(0);
 load();
 setInterval(load, POLL_MS);
-loadUsage();
-setInterval(loadUsage, 60_000);
+loadTailnet().then(loadUsage);
+setInterval(() => loadTailnet().then(loadUsage), 60_000);
