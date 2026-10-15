@@ -41,6 +41,7 @@ const revealed = new Set(); // sessionIds whose node has been unpacked onto the 
 let showArchived = readFlag("orca.showArchived");
 let obsidian = null; // { vault, folder } once the user opts in to copying documents there
 let idleMinutes = 30; // children quiet for longer than this share one "others" node
+let notify = readFlag("orca.notify"); // Mac notifications for sessions that need you or finish
 let motion = !readFlag("orca.still"); // starfield and link flow on the map
 document.body.classList.toggle("still", !motion);
 // Map motion knobs, as multiples of the defaults. Saved in this browser.
@@ -686,6 +687,9 @@ function renderRail() {
     (a, b) => STATES.indexOf(railState(a)) - STATES.indexOf(railState(b)) || b.updatedAt.localeCompare(a.updatedAt),
   );
   const attention = sessions.filter((s) => ["needs", "new"].includes(railState(s))).length;
+  // The dock badge of an installed app; a plain tab has none.
+  attention ? navigator.setAppBadge?.(attention) : navigator.clearAppBadge?.();
+  alertChanges(sessions);
   // The open session leads the tab title, so the browser and OS switchers show it too.
   const here = term && byPath.get(term.path)?.data.title;
   document.title = `${attention ? `(${attention}) ` : ""}${here ? `${here} · ` : ""}Orca`;
@@ -809,6 +813,28 @@ rail.addEventListener("click", async (e) => {
 });
 
 let parkedOpen = readFlag("orca.parkedOpen"); // Parked starts folded
+
+// ---- Notifications ----
+
+let lastStates = null; // sessionId -> rail state at the last render; the first render never notifies
+
+// Notifies for each rail session that just turned "needs you" or "new result", unless you are looking.
+// The tag stops two open tabs from showing the same notification twice.
+function alertChanges(sessions) {
+  const before = lastStates;
+  lastStates = new Map(sessions.map((s) => [s.sessionId, isParked(s) ? "parked" : railState(s)]));
+  if (!before || !notify || Notification.permission !== "granted" || document.hasFocus()) return;
+  for (const s of sessions) {
+    const st = lastStates.get(s.sessionId);
+    if (!["needs", "new"].includes(st) || before.get(s.sessionId) === st) continue;
+    const n = new Notification(s.title, { body: st === "needs" ? "Needs you" : `Finished${s.summary ? `: ${s.summary}` : ""}`, tag: s.sessionId });
+    n.onclick = () => {
+      focus();
+      n.close();
+      rail.querySelector(`button[data-sid="${CSS.escape(s.sessionId)}"]`)?.click();
+    };
+  }
+}
 
 // The current rail row is the open terminal's, or else the selected node's.
 // ⌥Tab steps through the sessions that wait on you: not Working, not Parked.
@@ -1349,6 +1375,7 @@ setting("obsidian").addEventListener("change", showObsidianFields);
 document.getElementById("settings").addEventListener("click", async () => {
   setting("idle").value = idleMinutes;
   setting("motion").checked = motion;
+  setting("notify").checked = notify && Notification.permission === "granted";
   for (const k in knobs) setting(k).value = knobs[k];
   showKnobs();
   const o = await loadObsidian();
@@ -1365,6 +1392,13 @@ document.getElementById("settings").addEventListener("click", async () => {
   settingsErr.hidden = true;
   settings.returnValue = "";
   settings.showModal();
+});
+// Turning notifications on asks the browser for permission; a refusal turns the switch back off.
+setting("notify").addEventListener("change", async (e) => {
+  if (!e.target.checked || Notification.permission === "granted") return;
+  if ((await Notification.requestPermission()) === "granted") return;
+  e.target.checked = false;
+  settings.querySelector(".notify-note").textContent = "The browser blocks notifications for this page. Allow them in the site settings (the icon left of the address), then turn this on.";
 });
 const showKnobs = () => (settings.querySelector(".knobs").hidden = !setting("motion").checked);
 setting("motion").addEventListener("change", showKnobs);
@@ -1383,6 +1417,8 @@ settings.addEventListener("close", async () => {
   try { localStorage.setItem("orca.motionKnobs", JSON.stringify(knobs)); } catch {}
   idleMinutes = Number(setting("idle").value);
   try { localStorage.setItem("orca.idleMinutes", idleMinutes); } catch {}
+  notify = setting("notify").checked;
+  try { localStorage.setItem("orca.notify", notify ? "1" : "0"); } catch {}
   motion = setting("motion").checked;
   document.body.classList.toggle("still", !motion);
   try { localStorage.setItem("orca.still", motion ? "0" : "1"); } catch {}
