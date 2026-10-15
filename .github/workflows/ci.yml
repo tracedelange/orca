@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: brew install tmux # the session tests start real tmux sessions
       - run: npm ci
       - run: npm run typecheck
       # The tests, with coverage written as lcov for Codecov.

@@ -27,6 +27,8 @@ jobs:
       - if: ${{ steps.release.outputs.release_created }}
         run: npm install -g npm@latest
       - if: ${{ steps.release.outputs.release_created }}
+        run: brew install tmux # the session tests start real tmux sessions
+      - if: ${{ steps.release.outputs.release_created }}
         run: npm ci && npm test
       - if: ${{ steps.release.outputs.release_created }}
         run: npm publish
