@@ -128,6 +128,9 @@ export function createServer(root: string) {
     const url = new URL(req.url ?? "/", "http://localhost");
     const name = url.searchParams.get("session") ?? "";
     const host = url.searchParams.get("host");
+    // Watching a child: read-only, and its window keeps the size its parent reads with `orca wait`.
+    const watch = url.searchParams.get("watch") === "1";
+    const flags = watch ? ["-f", "read-only,ignore-size"] : [];
     // A worker session must be one we polled; a local one must be a live tmux session here.
     const worker = host ? findWorker(root, host) : undefined;
     const known = host
@@ -139,7 +142,7 @@ export function createServer(root: string) {
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
       // "=" makes tmux match the name exactly rather than by prefix.
-      const [cmd, args] = worker ? ["ssh", attachArgs(worker, name)] : ["tmux", ["attach-session", "-t", `=${name}`]];
+      const [cmd, args] = worker ? ["ssh", attachArgs(worker, name, flags)] : ["tmux", ["attach-session", ...flags, "-t", `=${name}`]];
       const term = pty.spawn(cmd as string, args as string[], {
         name: "xterm-256color",
         cols: 100,
@@ -150,7 +153,7 @@ export function createServer(root: string) {
       term.onExit(() => ws.close());
       ws.on("message", (raw) => {
         const msg = JSON.parse(String(raw));
-        if (typeof msg.i === "string") term.write(msg.i);
+        if (typeof msg.i === "string" && !watch) term.write(msg.i);
         if (Array.isArray(msg.r)) term.resize(msg.r[0], msg.r[1]);
       });
       ws.on("close", () => term.kill());

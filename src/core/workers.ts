@@ -113,4 +113,4 @@ export function remoteEnd(w: Worker, s: Session) {
 
 // `ssh -t host tmux attach` for the terminal bridge.
 // The target is quoted because a leading "=" means something else to zsh, a common login shell.
-export const attachArgs = (w: Worker, tmux: string) => [...SSH_OPTS, "-t", w.host, `tmux attach-session -t '=${tmux}'`];
+export const attachArgs = (w: Worker, tmux: string, flags: string[] = []) => [...SSH_OPTS, "-t", w.host, `tmux attach-session ${flags.join(" ")} -t '=${tmux}'`];

@@ -359,6 +359,14 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   overflow: hidden;
   padding-left: 20px;
 }
+#rail .drawer { padding: 0 0 6px 20px; border-bottom: 1px solid var(--rule); }
+#rail li button.drawer-head { display: block; padding: 6px 10px; border: none; font: 10px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+#rail .drawer ol { border-left: 1px solid var(--ink-3); }
+#rail .drawer li button { padding: 6px 10px; }
+#rail .drawer .name { font-size: 13px; }
+#termview .managed { white-space: nowrap; color: var(--ink-2); }
+#termview .managed b { color: var(--ink); font-weight: 600; }
+#termview .managed:not([hidden]) ~ .keys { display: none; }
 #rail .meta { font: 10px var(--sans); color: var(--ink-3); padding-left: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Legend */

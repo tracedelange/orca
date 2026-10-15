@@ -670,7 +670,32 @@ function railRow(s) {
     <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${STATE_LABEL[st]}</span></span>
     ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
-  </button></li>`;
+  </button>${drawer(s)}</li>`;
+}
+
+// Sessions that a parent node started. They stay off the rail; the parent's row lists them in a drawer.
+const childSessions = (s) => sessionsIn(tree).filter((c) => c.parent === s.path);
+let openDrawers = readSet("orca.drawers"); // parent paths whose drawer is unfolded
+
+function drawer(s) {
+  const kids = childSessions(s);
+  if (!kids.length) return "";
+  const working = kids.filter((c) => sessionState(c) === "working").length;
+  const asking = kids.filter((c) => sessionState(c) === "needs").length;
+  const tally = [`${kids.length} ${kids.length === 1 ? "child" : "children"}`, working && `${working} working`, asking && `${asking} asking`].filter(Boolean).join(" · ");
+  const open = openDrawers.has(s.path);
+  return `<div class="drawer${open ? " open" : ""}"><button type="button" class="drawer-head" data-drawer="${esc(s.path)}">${open ? "▾" : "▸"} ${tally}</button>
+    ${open ? `<ol>${kids.map(childRow).join("")}</ol>` : ""}</div>`;
+}
+
+function childRow(c) {
+  const st = sessionState(c);
+  const label = st === "needs" ? "asks parent" : STATE_LABEL[st];
+  return `<li><button type="button" class="a-${st}${isOpen(c) ? " open" : ""}" data-child="${esc(c.sessionId)}">
+    <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(c.title)}</span><span class="st">${label}</span></span>
+    ${c.summary || c.prompt ? `<span class="sum">${esc(c.summary || c.prompt)}</span>` : ""}
+    <span class="meta">${esc(c.path)} · ${ago(c.updatedAt)}</span>
+  </button>${drawer(c)}</li>`;
 }
 
 function jobRow(j) {
@@ -696,6 +721,19 @@ rail.addEventListener("click", async (e) => {
   }
   const endButton = e.target.closest("[data-end]");
   if (endButton) return endSession(endButton);
+  const head = e.target.closest("[data-drawer]");
+  if (head) {
+    const p = head.dataset.drawer;
+    openDrawers.has(p) ? openDrawers.delete(p) : openDrawers.add(p);
+    try { localStorage.setItem("orca.drawers", JSON.stringify([...openDrawers])); } catch {}
+    return renderRail();
+  }
+  const child = e.target.closest("[data-child]");
+  if (child) {
+    const c = sessionsIn(tree).find((x) => x.sessionId === child.dataset.child);
+    if (c?.tmux) openTerminal(c.tmux, c.path, c.host, true);
+    return;
+  }
   const park = e.target.closest("[data-park]");
   if (park) {
     await post("park", { session: park.dataset.park, park: !!park.dataset.on }).catch(() => {});
@@ -1340,7 +1378,8 @@ panel.addEventListener("submit", async (e) => {
 // ---- Terminal ----
 
 // Terminal mode is the detailed view; the map is the default. Esc always leads back to the map.
-async function openTerminal(name, path = selected ?? graphRoot.data.path, host = undefined) {
+// `watch` opens a child session read-only; its parent does the typing.
+async function openTerminal(name, path = selected ?? graphRoot.data.path, host = undefined, watch = false) {
   if (term) stopTerminal();
   document.body.classList.add("mode-term");
   termview.hidden = false;
@@ -1349,6 +1388,9 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   const trail = d ? d.ancestors().reverse().slice(0, -1).map((a) => a.data.title).join(" / ") : path || "/";
   termview.querySelector(".title").textContent = title;
   termview.querySelector(".trail").textContent = [trail, host, name].filter(Boolean).join("  ·  ");
+  const managed = termview.querySelector(".managed");
+  managed.hidden = !watch;
+  managed.querySelector("b").textContent = byPath.get(d?.data.parent)?.data.title ?? d?.data.parent ?? "";
   // Flash the title over the terminal, so a switch is hard to miss.
   const flash = termview.querySelector(".flash");
   flash.textContent = title;
@@ -1405,7 +1447,7 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   });
 
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/api/term?session=${encodeURIComponent(name)}${host ? `&host=${encodeURIComponent(host)}` : ""}`);
+  const ws = new WebSocket(`${proto}://${location.host}/api/term?session=${encodeURIComponent(name)}${host ? `&host=${encodeURIComponent(host)}` : ""}${watch ? "&watch=1" : ""}`);
   const resize = () => {
     fit.fit();
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ r: [xterm.cols, xterm.rows] }));
@@ -1414,10 +1456,10 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   ws.onmessage = (e) => xterm.write(e.data);
   ws.onclose = () => xterm.write("\r\n[disconnected]\r\n");
   const send = (d) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ i: d }));
-  xterm.onData(send);
+  if (!watch) xterm.onData(send);
   const ro = new ResizeObserver(resize);
   ro.observe(el);
-  term = { xterm, ws, ro, name, path, host };
+  term = { xterm, ws, ro, name, path, host, watch };
   lastTerm = { name, path, host };
   markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   renderRail();
@@ -1429,6 +1471,8 @@ function termTheme() {
   const v = (name) => css.getPropertyValue(name).trim();
   return { background: v("--paper-2"), foreground: v("--ink"), cursor: v("--ink"), selectionBackground: v("--ink-3") };
 }
+
+termview.querySelector(".takeover").addEventListener("click", () => openTerminal(term.name, term.path, term.host));
 
 function stopTerminal() {
   docview.hidden = true;
