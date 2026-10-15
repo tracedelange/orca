@@ -46,7 +46,7 @@ document.body.classList.toggle("still", !motion);
 // Map motion knobs, as multiples of the defaults. Saved in this browser.
 const knobs = {};
 const readKnobs = () => {
-  Object.assign(knobs, { density: 1, parallax: 1, flow: 1 });
+  Object.assign(knobs, { density: 1, parallax: 1, flow: 1, orbit: 1 });
   try { Object.assign(knobs, JSON.parse(localStorage.getItem("orca.motionKnobs"))); } catch {}
 };
 readKnobs();
@@ -315,6 +315,42 @@ function panStars(t) {
 drawStars();
 addEventListener("resize", drawStars);
 
+// ---- Orbit ----
+
+// The subtree of the open node nearest the view centre turns slowly around it: one turn in ORBIT_S seconds at 1x.
+// It holds still while a button is down or the pointer is on a node, so clicks and drags land where you aim.
+const ORBIT_S = 600;
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+let pivot = null; // re-picked after each pan or zoom and each render
+let held = false, onNode = false;
+addEventListener("pointerdown", () => (held = true));
+addEventListener("pointerup", () => (held = false));
+svg.on("pointerover.orbit", (e) => (onNode = !!e.target.closest("g.node")));
+zoom.on("end.orbit", () => (pivot = null));
+
+function pickPivot() {
+  const t = d3.zoomTransform(svg.node());
+  const [x, y] = t.invert([center.cx, center.cy]);
+  return d3.least(sim.nodes().filter((n) => n.d.children && isUnpacked(n.d)), (n) => (n.x - x) ** 2 + (n.y - y) ** 2);
+}
+
+let last = 0;
+d3.timer((now) => {
+  const dt = Math.min(now - last, 100) / 1000;
+  last = now;
+  if (!motion || !knobs.orbit || calm.matches || held || onNode) return;
+  pivot ??= pickPivot();
+  if (!pivot) return;
+  const a = (2 * Math.PI * knobs.orbit * dt) / ORBIT_S, cos = Math.cos(a), sin = Math.sin(a);
+  for (const n of sim.nodes()) {
+    if (n === pivot || n.fx != null || !n.d.ancestors().includes(pivot.d)) continue;
+    const dx = n.x - pivot.x, dy = n.y - pivot.y;
+    n.x = pivot.x + dx * cos - dy * sin;
+    n.y = pivot.y + dx * sin + dy * cos;
+  }
+  ticked();
+});
+
 let samples = [];  // recent pan positions, to measure release speed
 let glider = null; // d3.timer for the coast after a pan
 let zoomer = null; // d3.timer that eases toward targetK
@@ -452,6 +488,7 @@ function render() {
     // A gentle nudge: new nodes already start near their place, so the rest barely moves.
     sim.alpha(shownKey ? 0.3 : 1).restart();
     shownKey = key;
+    pivot = null;
   }
 
   const t = d3.transition().duration(GROW_MS).ease(EASE);
@@ -629,12 +666,25 @@ function relayout(duration) {
 const parentLive = (s) => !!byPath.get(s.parent)?.data.sessions.length;
 const railSessions = () => sessionsIn(graphRoot).filter((s) => !(s.parent && parentLive(s)) && (!s.background || sessionState(s) === "needs"));
 
+// A parent waits on its children in the background, so on its own it reads as finished.
+// The rail counts it as working while a child works, and as needing you when a child has asked
+// for over a minute and the parent has not picked it up.
+function railState(s) {
+  const own = sessionState(s);
+  if (own === "working" || own === "needs" || isParked(s)) return own;
+  const kids = childSessions(s);
+  const stale = new Date(Date.now() - 60000).toISOString();
+  if (kids.some((c) => railState(c) === "needs" && c.updatedAt < stale)) return "needs";
+  if (kids.some((c) => ["working", "needs"].includes(railState(c)))) return "working";
+  return own;
+}
+
 function renderRail() {
   if (!graphRoot) return;
   const sessions = railSessions().sort(
-    (a, b) => STATES.indexOf(sessionState(a)) - STATES.indexOf(sessionState(b)) || b.updatedAt.localeCompare(a.updatedAt),
+    (a, b) => STATES.indexOf(railState(a)) - STATES.indexOf(railState(b)) || b.updatedAt.localeCompare(a.updatedAt),
   );
-  const attention = sessions.filter((s) => ["needs", "new"].includes(sessionState(s))).length;
+  const attention = sessions.filter((s) => ["needs", "new"].includes(railState(s))).length;
   // The open session leads the tab title, so the browser and OS switchers show it too.
   const here = term && byPath.get(term.path)?.data.title;
   document.title = `${attention ? `(${attention}) ` : ""}${here ? `${here} · ` : ""}Orca`;
@@ -649,7 +699,7 @@ function renderRail() {
   // Working sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
   const groups = { working: jobs.map(jobRow), rest: [], parked: [] };
-  for (const s of sessions) groups[isParked(s) ? "parked" : sessionState(s) === "working" ? "working" : "rest"].push(railRow(s));
+  for (const s of sessions) groups[isParked(s) ? "parked" : railState(s) === "working" ? "working" : "rest"].push(railRow(s));
   for (const [name, list] of Object.entries(groups)) {
     const section = rail.querySelector(`[data-group="${name}"]`);
     section.hidden = !list.length;
@@ -662,12 +712,13 @@ function renderRail() {
 }
 
 function railRow(s) {
-  const st = sessionState(s);
+  const st = railState(s);
+  const label = st === sessionState(s) ? STATE_LABEL[st] : st === "working" ? "child working" : "child asks";
   const park = isParked(s)
     ? `<button type="button" class="end park" data-park="${esc(s.sessionId)}" title="Back to the rail">Unpark</button>`
     : `<button type="button" class="end park" data-park="${esc(s.sessionId)}" data-on="1" title="Move to Parked until it acts again">Park</button>`;
   return `<li>${park}<button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
-    <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${STATE_LABEL[st]}</span></span>
+    <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${label}</span></span>
     ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
   </button>${drawer(s)}</li>`;
@@ -689,7 +740,7 @@ function drawer(s) {
 }
 
 function childRow(c) {
-  const st = sessionState(c);
+  const st = railState(c);
   const label = st === "needs" ? "asks parent" : STATE_LABEL[st];
   return `<li><button type="button" class="a-${st}${isOpen(c) ? " open" : ""}" data-child="${esc(c.sessionId)}">
     <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(c.title)}</span><span class="st">${label}</span></span>
