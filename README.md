@@ -128,6 +128,8 @@ orca launch work/vmt                        # start Claude in tmux
 orca launch work/vmt --resume               # reopen the last conversation of the node
 orca dispatch work "..."                    # let Haiku pick or make a node under work, then start Claude
 orca queue work/vmt "..."                   # add a task to the queue of the node
+orca wait work/vmt                          # wait until the child session stops or asks, then show its screen
+orca send work/vmt "..."                    # type a reply into the child session
 orca end orca-work-vmt                      # end a session (tmux name or session id)
 orca claim personal/sourdough               # from inside a Claude session: attach it to a node
 orca claim --auto "..." --scope personal    # the same, but let Haiku pick or make the node
@@ -137,6 +139,8 @@ orca help
 ```
 
 `mv` and `rm` stop with an error while a session is live in the subtree.
+
+When a Claude session runs `orca dispatch` or `orca launch`, orca writes `parent: <node path>` in the child node. The parent session answers the questions of the child with `orca wait` and `orca send`. The child stays off the rail while a session is live on the parent node.
 
 ## Workers
 

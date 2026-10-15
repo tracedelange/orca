@@ -59,6 +59,12 @@ test("update archives and unarchives a node", () => {
   assert.doesNotMatch(fs.readFileSync(path.join(root, "work/vmt-analyzer/CLAUDE.md"), "utf8"), /archived/);
 });
 
+test("update records a parent node", () => {
+  const root = seededRoot();
+  updateNode(root, "work/vmt-analyzer", { parent: "work" });
+  assert.equal(readNodeDetail(root, "work/vmt-analyzer").parent, "work");
+});
+
 test("create refuses existing nodes and hidden names", () => {
   const root = seededRoot();
   assert.deepEqual(createNode(root, "work/a/b", { goal: "G" }), ["work/a", "work/a/b"]);

@@ -29,6 +29,7 @@ YAML frontmatter, then Markdown:
 Run `orca new <path> --title "..." --goal "..."`. The path is relative to this root.
 If the CLI is not available, make the directory and write a `CLAUDE.md` in the format above.
 When you change a node, add a dated line to its Log.
+You answer the questions of child nodes you dispatch; ask the user only when you can't. See `orca help`.
 
 ## Outputs
 Write documents for the user (plans, reports, reviews) as Markdown in your node's `docs/` folder.

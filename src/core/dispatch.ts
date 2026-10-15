@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { createNode, EditError } from "./edit.ts";
+import { createNode, EditError, updateNode } from "./edit.ts";
 import { resolveInRoot } from "./paths.ts";
 import { startSession } from "./workers.ts";
 import { flatten, readTree } from "./tree.ts";
@@ -59,18 +59,20 @@ export async function askHaiku(system: string, schema: object, prompt: string) {
 
 // Files the prompt into the tree and starts a session on it. Returns where it went.
 // Throws with the choices when Haiku is not sure; the viewer asks instead (see queueDispatch).
-export async function dispatch(root: string, scope: string, prompt: string, host?: string) {
+export async function dispatch(root: string, scope: string, prompt: string, host?: string, parent?: string) {
   if (!prompt.trim()) throw new EditError("prompt is empty");
   resolveInRoot(root, scope);
   const { sure, choices } = await suggest(root, scope, prompt);
   if (!sure) throw new EditError(`not sure where this goes: ${choices.map((c) => c.path || "/").join(", ")}. Dispatch again with a narrower scope.`);
-  return file(root, choices[0], prompt, host);
+  return file(root, choices[0], prompt, host, parent);
 }
 
-function file(root: string, p: Placement, prompt: string, host?: string) {
+function file(root: string, p: Placement, prompt: string, host?: string, parent?: string) {
   const created = fs.existsSync(path.join(resolveInRoot(root, p.path), "CLAUDE.md"))
     ? []
     : createNode(root, p.path, { title: p.title, goal: p.goal, context: `Started from this prompt:\n\n${quote(prompt)}` });
+  // Set before the session starts, so the child never shows on the rail.
+  if (parent !== undefined && parent !== p.path) updateNode(root, p.path, { parent });
   return { path: p.path, title: p.title, created, ...startSession(root, p.path, { prompt, host }) };
 }
 

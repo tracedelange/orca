@@ -9,12 +9,13 @@ export type NodeFields = {
   branch?: string;
   background?: boolean; // a queue worker: shown on the map, kept off the rail
   archived?: boolean; // hidden from the map until shown again; stays on disk where it is
+  parent?: string; // node path of the session that dispatched this one; that session answers its questions
   extra: Record<string, unknown>;
   issues: Issue[];
 };
 
 // "status" is no longer used (state comes from sessions); old lines are ignored rather than shown.
-const KNOWN = new Set(["title", "goal", "status", "repo", "branch", "background", "archived"]);
+const KNOWN = new Set(["title", "goal", "status", "repo", "branch", "background", "archived", "parent"]);
 
 export function parseNode(text: string, fallbackTitle: string): NodeFields & { body: string } {
   const issues: Issue[] = [];
@@ -49,6 +50,7 @@ export function parseNode(text: string, fallbackTitle: string): NodeFields & { b
     branch: scalar(data.branch),
     background: data.background === true || undefined,
     archived: data.archived === true || undefined,
+    parent: scalar(data.parent),
     extra: Object.fromEntries(Object.entries(data).filter(([k]) => !KNOWN.has(k))),
     issues,
     body,

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,8 +8,8 @@ import { adoptSession, createNode, endSession, moveNode, removeNode, updateNode 
 import { hooksInstalled, installHooks, installSkill, USER_SETTINGS, USER_SKILL } from "../core/install.ts";
 import { resolveInRoot, rootDir } from "../core/paths.ts";
 import { addToQueue, queueItems } from "../core/queue.ts";
-import { claim, findClaudePid } from "../core/claims.ts";
-import { dropSession } from "../core/sessions.ts";
+import { claim, claimedNodeDir, findClaudePid } from "../core/claims.ts";
+import { dropSession, liveTmuxSessions, readSessions, tmuxBase } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
 import { flatten, nodeContext, readTree, type TreeNode } from "../core/tree.ts";
 import { daemon } from "./daemon.ts";
@@ -28,6 +29,8 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   adopt,
   worker,
   queue,
+  wait,
+  send,
   ...daemon,
   up,
   down: daemon.stop,
@@ -39,7 +42,15 @@ const HELP = `usage: orca <command>
 
 server:  up | down | status | restart | open | logs | uninstall
 nodes:   new | mv | rm | set | tree | check | init | queue
-claude:  launch | dispatch | end | claim | adopt | worker | install-hooks`;
+claude:  launch | dispatch | end | claim | adopt | worker | install-hooks
+child:   wait | send
+
+Sub-nodes: a session that runs \`orca dispatch\` or \`orca launch\` becomes the parent of that node.
+The child stays off the viewer's rail, and the parent answers its questions:
+  orca wait <path>           blocks until the child finishes or asks; prints its status and screen.
+                             It can take longer than a Bash timeout, so run it in the background.
+  orca send <path> "reply"   types the reply into the child's session
+If the parent cannot answer, it asks the user in its own session.`;
 const [cmd = "help", ...args] = process.argv.slice(2);
 
 try {
@@ -94,6 +105,7 @@ function launchSession(argv: string[]) {
   });
   if (positionals.length !== 1) throw new Error("usage: orca launch <path> [--resume] [--host <worker>]");
   requireRoot();
+  setParent(positionals[0]);
   const s = startSession(root, positionals[0], values);
   console.log(`started ${s.tmux}${s.host ? ` on ${s.host}` : ""}; attach with: ${attachCommand(s)}`);
 }
@@ -119,9 +131,54 @@ async function dispatchPrompt(argv: string[]) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { host: { type: "string" } } });
   if (positionals.length !== 2) throw new Error('usage: orca dispatch <scope> "<prompt>" [--host <worker>]');
   requireRoot();
-  const d = await dispatch(root, positionals[0], positionals[1], values.host);
+  const d = await dispatch(root, positionals[0], positionals[1], values.host, callerNode());
   for (const p of d.created) console.log(`created ${p}`);
   console.log(`dispatched to ${d.path}${d.host ? ` on ${d.host}` : ""}; attach with: ${attachCommand(d)}`);
+}
+
+// The node of the Claude session that ran this command, if any.
+function callerNode(): string | undefined {
+  const pid = findClaudePid(true);
+  if (!pid) return undefined;
+  const n = flatten(readTree(root)).find((n) => n.sessions.some((s) => s.pid === pid && !s.host));
+  if (n) return n.path;
+  const claimed = claimedNodeDir(root, pid);
+  return claimed && path.relative(root, claimed);
+}
+
+function setParent(rel: string) {
+  const parent = callerNode();
+  if (parent !== undefined && parent !== rel.replace(/^\/+|\/+$/g, "")) updateNode(root, rel, { parent });
+}
+
+// Blocks until the child's session finishes its turn or asks something, then prints what it shows.
+async function wait(argv: string[]) {
+  if (argv.length !== 1) throw new Error("usage: orca wait <path>");
+  requireRoot();
+  const dir = resolveInRoot(root, argv[0]);
+  const tmux = tmuxBase(root, dir);
+  for (;;) {
+    const sessions = readSessions(dir);
+    // No session file yet right after a dispatch: wait while its tmux session is alive.
+    if (!sessions.length && !liveTmuxSessions().has(tmux)) return console.log("no live session");
+    const s = sessions.find((s) => s.state !== "working");
+    if (sessions.length && s) {
+      console.log(`${s.state}: ${s.summary ?? ""}`);
+      if (s.tmux) console.log(execFileSync("tmux", ["capture-pane", "-p", "-t", `=${s.tmux}:`], { encoding: "utf8" }).trimEnd());
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+function send(argv: string[]) {
+  if (argv.length !== 2) throw new Error('usage: orca send <path> "message"');
+  requireRoot();
+  const s = readSessions(resolveInRoot(root, argv[0])).find((s) => s.tmux);
+  if (!s) throw new Error(`no session in tmux on ${argv[0]}`);
+  execFileSync("tmux", ["send-keys", "-t", `=${s.tmux}:`, "-l", argv[1]]);
+  execFileSync("tmux", ["send-keys", "-t", `=${s.tmux}:`, "Enter"]);
+  console.log(`sent to ${s.tmux}`);
 }
 
 function adopt(argv: string[]) {
