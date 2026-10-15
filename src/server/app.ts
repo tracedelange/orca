@@ -10,7 +10,7 @@ import { PathError } from "../core/paths.ts";
 import { copyToObsidian, listVaults, readObsidian, setObsidian } from "../core/obsidian.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
 import { liveTmuxSessions } from "../core/sessions.ts";
-import { markSeen, readSeen } from "../core/seen.ts";
+import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, startSession, type WorkerState } from "../core/workers.ts";
@@ -67,6 +67,7 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   copy: (root, b) => ({ copied: copyToObsidian(root, docPath(root, String(b.path ?? ""))) }),
   obsidian: (root, b) => ({ obsidian: setObsidian(root, String(b.vault ?? ""), String(b.folder ?? "")) ?? null }),
   seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),
+  park: (root, b) => (setParked(root, String(b.session ?? ""), !!b.park, liveSessionIds(root)), {}),
 };
 const liveSessionIds = (root: string) =>
   new Set(flatten(attachWorkerSessions(readTree(root), workers)).flatMap((n) => n.sessions.map((s) => s.sessionId)));
@@ -89,6 +90,7 @@ export function createServer(root: string) {
     try {
       if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
       if (url.pathname === "/api/seen") return json(res, 200, readSeen(root));
+      if (url.pathname === "/api/parked") return json(res, 200, readParked(root));
       if (url.pathname === "/api/obsidian") return json(res, 200, { vaults: listVaults(), obsidian: readObsidian(root) ?? null });
       if (url.pathname === "/api/dispatches") return json(res, 200, listJobs());
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));

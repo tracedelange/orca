@@ -20,3 +20,24 @@ export function markSeen(root: string, marks: Record<string, unknown>, live: Set
   fs.mkdirSync(path.dirname(seenFile(root)), { recursive: true });
   fs.writeFileSync(seenFile(root), JSON.stringify(kept));
 }
+
+// When you parked each session, by session id. A session that acts after that wakes up (the viewer compares updatedAt).
+const parkedFile = (root: string) => path.join(root, ".orca", "parked.json");
+
+export function readParked(root: string): Record<string, string> {
+  try {
+    return JSON.parse(fs.readFileSync(parkedFile(root), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+// Parks or unparks one session and drops sessions that are no longer live.
+export function setParked(root: string, id: string, park: boolean, live: Set<string>) {
+  const parked = { ...readParked(root) };
+  if (park) parked[id] = new Date().toISOString();
+  else delete parked[id];
+  const kept = Object.fromEntries(Object.entries(parked).filter(([p]) => live.has(p)));
+  fs.mkdirSync(path.dirname(parkedFile(root)), { recursive: true });
+  fs.writeFileSync(parkedFile(root), JSON.stringify(kept));
+}

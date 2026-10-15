@@ -34,6 +34,8 @@ let editing = false;  // a form or document is open in the panel; polling must n
 const rail = document.getElementById("rail");
 let seen = {}; // sessionId -> finishedAt of the last result you looked at; the server keeps it for every device
 let seenText = "";
+let parked = {}; // sessionId -> when you parked it; the server keeps it for every device
+let parkedText = "";
 let jobs = []; // dispatches still being placed, or failed: [{ id, prompt, host, startedAt, error }]
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
@@ -58,12 +60,15 @@ archivedButton.classList.toggle("on", showArchived);
 
 async function load() {
   fetch("/api/workers").then((r) => r.json()).then((w) => (workerList = w)).catch(() => {});
-  const [res, seenRes, jobsRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches")]);
+  const [res, seenRes, jobsRes, parkedRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches"), fetch("/api/parked")]);
   jobs = await jobsRes.json();
   const text = await res.text();
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
+  const nextParked = await parkedRes.text();
   const nextSeen = await seenRes.text();
-  if (nextSeen !== seenText) {
+  if (nextSeen !== seenText || nextParked !== parkedText) {
+    parkedText = nextParked;
+    parked = JSON.parse(nextParked);
     seenText = nextSeen;
     seen = JSON.parse(nextSeen);
     panelText = ""; // another device may have marked a session in the open panel
@@ -122,7 +127,9 @@ function markSeen(sessions) {
 
 // A finished turn you have not opened since it finished.
 const isNew = (s) => s.state === "ready" && !!s.finishedAt && s.finishedAt > (seen[s.sessionId] ?? "");
-const sessionState = (s) => (s.state === "needs-input" ? "needs" : isNew(s) ? "new" : s.state);
+// A parked session stays parked until it acts again. It reads as idle everywhere, so it does not call for you.
+const isParked = (s) => !!parked[s.sessionId] && s.updatedAt <= parked[s.sessionId];
+const sessionState = (s) => (isParked(s) ? "idle" : s.state === "needs-input" ? "needs" : isNew(s) ? "new" : s.state);
 const withNode = (x) => x.data.sessions.map((s) => ({ ...s, path: x.data.path, title: x.data.title, background: x.data.background, parent: x.data.parent }));
 const sessionsIn = (d) => d.descendants().flatMap(withNode);
 const mostUrgent = (sessions) => STATES.find((st) => sessions.some((s) => sessionState(s) === st)) ?? "idle";
@@ -641,19 +648,25 @@ function renderRail() {
   rail.hidden = !sessions.length && !jobs.length;
   // Working sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
-  const groups = { working: jobs.map(jobRow), rest: [] };
-  for (const s of sessions) groups[sessionState(s) === "working" ? "working" : "rest"].push(railRow(s));
+  const groups = { working: jobs.map(jobRow), rest: [], parked: [] };
+  for (const s of sessions) groups[isParked(s) ? "parked" : sessionState(s) === "working" ? "working" : "rest"].push(railRow(s));
   for (const [name, list] of Object.entries(groups)) {
     const section = rail.querySelector(`[data-group="${name}"]`);
     section.hidden = !list.length;
     section.querySelector("ol").innerHTML = list.join("");
   }
+  const parkedSection = rail.querySelector('[data-group="parked"]');
+  parkedSection.classList.toggle("folded", !parkedOpen);
+  parkedSection.querySelector(".fold").textContent = `Parked · ${groups.parked.length}`;
   if (wasHidden !== rail.hidden) relayout(300);
 }
 
 function railRow(s) {
   const st = sessionState(s);
-  return `<li><button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
+  const park = isParked(s)
+    ? `<button type="button" class="end park" data-park="${esc(s.sessionId)}" title="Back to the rail">Unpark</button>`
+    : `<button type="button" class="end park" data-park="${esc(s.sessionId)}" data-on="1" title="Move to Parked until it acts again">Park</button>`;
+  return `<li>${park}<button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
     <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${STATE_LABEL[st]}</span></span>
     ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
@@ -683,6 +696,16 @@ rail.addEventListener("click", async (e) => {
   }
   const endButton = e.target.closest("[data-end]");
   if (endButton) return endSession(endButton);
+  const park = e.target.closest("[data-park]");
+  if (park) {
+    await post("park", { session: park.dataset.park, park: !!park.dataset.on }).catch(() => {});
+    return load();
+  }
+  if (e.target.closest(".fold")) {
+    parkedOpen = !parkedOpen;
+    try { localStorage.setItem("orca.parkedOpen", parkedOpen ? "1" : "0"); } catch {}
+    return renderRail();
+  }
   const row = e.target.closest("button[data-sid]");
   if (!row) return;
   const s = sessionsIn(tree).find((x) => x.sessionId === row.dataset.sid);
@@ -695,11 +718,14 @@ rail.addEventListener("click", async (e) => {
   else markSeen([s]);
 });
 
+let parkedOpen = readFlag("orca.parkedOpen"); // Parked starts folded
+
 // The current rail row is the open terminal's, or else the selected node's.
-const railRows = () => [...rail.querySelectorAll("button[data-sid]")];
+// ⌥Tab steps through the sessions that wait on you: not Working, not Parked.
+const railRows = () => [...rail.querySelectorAll('[data-group="rest"] button[data-sid]')];
 const isCurrent = (r) => (term ? r.classList.contains("open") : r.dataset.path === selected);
 
-// ⌥Tab and ⌥⇧Tab step down and up the rail in its shown order, wrapping, as a click would.
+// ⌥Tab and ⌥⇧Tab step down and up the Sessions group in its shown order, wrapping, as a click would.
 function stepRail(back) {
   const rows = railRows();
   if (!rows.length) return;
