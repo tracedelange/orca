@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="web/orca.svg" width="112" alt="The orca icon">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/orca-dark.svg">
+    <img src="web/orca.svg" width="112" alt="The orca icon">
+  </picture>
 </p>
 
 <h1 align="center">orca</h1>
