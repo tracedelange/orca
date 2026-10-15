@@ -5,17 +5,19 @@
   </picture>
 </p>
 
-<h1 align="center">orca</h1>
+<h1 align="center">Orca</h1>
 
-<p align="center">One map for all of your Claude Code sessions, and one place that tells you which session needs you now.</p>
+<p align="center">Graph based agentic session management harness designed to protect your attention</p>
 
 ---
 
-## Why orca
+## Why Orca
 
-When you run one agent, you watch one terminal. When you run ten agents on six projects, you lose track. A session waits for an answer in a tab that you closed. A result sits unread for an hour. You forget which project a session is for.
+In the [8 Levels of AI Assisted Development article](https://www.augmentcode.com/guides/steve-yegge-8-levels-ai-assisted-development), the 8th level is defined as the creation of a custom orchestrator. This is my response. 
 
-Agents and compute are not the scarce resource. Your attention is the scarce resource. Orca manages your attention.
+AI-driven-development has led to a new stage of software hyper-customizability. Naturally, given each individual has a unique perspective on how the world works and how they work in that world, each individual can now have tools designed to perfectly fit their preferred method of work. Orca is my attempt at creating just such a tool for my own AI-Driven Development tasks. 
+
+The vision for this project is a harness that's better at managing your most valuable resource: Your attention. Simply, it'a graph view tied to claude session management. This should look familiar to Obsidian users. The thesis behind the project is not to burn more tokens faster, but to treat your awareness / attention like you're the executive of your workflow, because you are!
 
 Orca keeps your work as a tree of **nodes**: one folder for each area, project, or task. Each Claude Code session attaches to a node. The viewer shows the tree as a live map. A node that needs you is easy to see, and the rail lists every session from most urgent to least urgent.
 
