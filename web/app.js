@@ -342,8 +342,9 @@ d3.timer((now) => {
   pivot ??= pickPivot();
   if (!pivot) return;
   const a = (2 * Math.PI * knobs.orbit * dt) / ORBIT_S, cos = Math.cos(a), sin = Math.sin(a);
+  const under = (d) => { for (let a = d.parent; a; a = a.parent) if (a === pivot.d) return true; };
   for (const n of sim.nodes()) {
-    if (n === pivot || n.fx != null || !n.d.ancestors().includes(pivot.d)) continue;
+    if (n.fx != null || !under(n.d)) continue;
     const dx = n.x - pivot.x, dy = n.y - pivot.y;
     n.x = pivot.x + dx * cos - dy * sin;
     n.y = pivot.y + dx * sin + dy * cos;
