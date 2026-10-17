@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/tracedelange/orca/compare/orca-v0.2.0...orca-v0.3.0) (2026-10-17)
+
+
+### Features
+
+* **viewer:** rail toggle button and Docs folder button in the session view ([aaaba6a](https://github.com/tracedelange/orca/commit/aaaba6ad4445be49755e04e1f8dd6068af9a0c88))
+
 ## [0.2.0](https://github.com/tracedelange/orca/compare/orca-v0.1.0...orca-v0.2.0) (2026-10-15)
 
 
