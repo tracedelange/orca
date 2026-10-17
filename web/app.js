@@ -57,6 +57,15 @@ try { idleMinutes = Number(localStorage.getItem("orca.idleMinutes")) || 30; } ca
 const opened = new Set(); // parents whose "others" node was clicked; packing the parent groups them again
 const archivedButton = document.getElementById("archived");
 archivedButton.classList.toggle("on", showArchived);
+let railOff = readFlag("orca.railOff");
+const railButton = document.getElementById("railbtn");
+railButton.classList.toggle("on", !railOff);
+railButton.addEventListener("click", () => {
+  railOff = !railOff;
+  railButton.classList.toggle("on", !railOff);
+  try { localStorage.setItem("orca.railOff", railOff ? "1" : "0"); } catch {}
+  renderRail();
+});
 
 // ---- Data ----
 
@@ -701,7 +710,7 @@ function renderRail() {
   prompt.title = open?.summary ?? "";
 
   const wasHidden = rail.hidden;
-  rail.hidden = !sessions.length && !jobs.length;
+  rail.hidden = railOff || (!sessions.length && !jobs.length);
   // Working sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
   const groups = { working: jobs.map(jobRow), rest: [], parked: [] };
@@ -1566,6 +1575,10 @@ function termTheme() {
 }
 
 termview.querySelector(".takeover").addEventListener("click", () => openTerminal(term.name, term.path, term.host));
+termview.querySelector(".docsdir").addEventListener("click", (e) => {
+  popout(e.currentTarget, term.path, "finder");
+  term.xterm.focus(); // keep typing in the session
+});
 
 function stopTerminal() {
   docview.hidden = true;

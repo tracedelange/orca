@@ -20,6 +20,7 @@
     <button id="about" type="button">Info</button>
     <button id="new" type="button">New</button>
     <button id="dispatch" type="button">Dispatch</button>
+    <button id="railbtn" type="button" title="Show or hide the sessions rail">Rail</button>
     <button id="archived" type="button" title="Show archived nodes">Archived</button>
     <button id="mapbtn" type="button">Map</button>
     <button id="theme" type="button" title="Theme: system, light or dark"></button>
@@ -153,7 +154,7 @@
 
   <!-- Terminal mode: one session fills the space right of the rail. -->
   <section id="termview" hidden>
-    <div class="top"><span class="kicker"><span class="head"><span class="title"></span><span class="trail"></span></span><span class="prompt"></span></span><span class="managed" hidden>Managed by <b></b> · read-only <button class="takeover" type="button">Take over</button></span><span class="keys">esc map · shift+esc sends esc to claude · ⌘. toggle · ⌥tab next · ⌥q end</span></div>
+    <div class="top"><span class="kicker"><span class="head"><span class="title"></span><span class="trail"></span></span><span class="prompt"></span></span><span class="managed" hidden>Managed by <b></b> · read-only <button class="takeover" type="button">Take over</button></span><button class="docsdir" type="button" title="Open this node's docs folder in Finder">Docs folder</button><span class="keys">esc map · shift+esc sends esc to claude · ⌘. toggle · ⌥tab next · ⌥q end</span></div>
     <!-- A .md path clicked in the terminal opens in #doc, beside it. -->
     <div class="flash" aria-hidden="true"></div>
     <div class="split">

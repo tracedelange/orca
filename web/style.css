@@ -365,6 +365,7 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail .drawer li button { padding: 6px 10px; }
 #rail .drawer .name { font-size: 13px; }
 #termview .managed { white-space: nowrap; color: var(--ink-2); }
+#termview .docsdir { flex-shrink: 0; margin-left: auto; }
 #termview .managed b { color: var(--ink); font-weight: 600; }
 #termview .managed:not([hidden]) ~ .keys { display: none; }
 #rail .meta { font: 10px var(--sans); color: var(--ink-3); padding-left: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
