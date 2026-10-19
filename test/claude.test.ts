@@ -24,7 +24,7 @@ fs.mkdirSync(process.env.TMUX_TMPDIR!);
 
 const { installHooks, USER_SETTINGS } = await import("../src/core/install.ts");
 const { askHaiku, chooseDispatch, dismissDispatch, dispatch, listJobs, queueDispatch, retryDispatch } = await import("../src/core/dispatch.ts");
-const { launch } = await import("../src/core/sessions.ts");
+const { closeShell, launch, launchShell, listShells } = await import("../src/core/sessions.ts");
 const { queueItems, runQueues } = await import("../src/core/queue.ts");
 const { flatten, readTree } = await import("../src/core/tree.ts");
 installHooks(USER_SETTINGS);
@@ -167,6 +167,19 @@ test("launch names sessions after the node, resumes with --continue, and needs t
   } finally {
     installHooks(USER_SETTINGS);
   }
+});
+
+test("a shell starts in its node folder, lists with its node, and closes only as a shell", async () => {
+  const root = seededRoot();
+  assert.equal(launchShell(root, "work"), "orca-sh-work");
+  assert.equal(launchShell(root, ""), "orca-sh-root");
+  launch(root, "work");
+  const shells = await until(() => { const l = listShells(); return l.length === 2 && l.every((s) => s.cwd) ? l : undefined; });
+  const work = shells.find((s) => s.tmux === "orca-sh-work")!;
+  assert.deepEqual([work.path, fs.realpathSync(work.cwd)], ["work", fs.realpathSync(path.join(root, "work"))]);
+  assert.throws(() => closeShell("orca-work"), /no shell orca-work/);
+  closeShell("orca-sh-work");
+  assert.deepEqual(listShells().map((s) => [s.tmux, s.path]), [["orca-sh-root", ""]]);
 });
 
 test("the CLI launches and dispatches, and says how to attach", async () => {

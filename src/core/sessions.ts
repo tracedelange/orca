@@ -117,3 +117,35 @@ export function launch(root: string, rel: string, opts: LaunchOptions = {}): str
   execFileSync("tmux", ["new-session", "-d", "-s", name, "-c", opts.cwd ?? dir, "-x", "200", "-y", "50", ...env, ...claude]);
   return name;
 }
+
+// ---- Shells ----
+
+// A plain shell in tmux, started in a node folder. The @orca_shell option marks it as a shell, and
+// @orca_node records its node. It ends when you exit the shell or close it.
+export type Shell = { tmux: string; path: string; cwd: string; created: string };
+
+export function launchShell(root: string, rel: string): string {
+  const dir = resolveInRoot(root, rel);
+  const base = tmuxBase(root, dir).replace(/^orca-/, "orca-sh-");
+  const live = liveTmuxSessions();
+  let name = base;
+  for (let i = 2; live.has(name); i++) name = `${base}-${i}`;
+  execFileSync("tmux", ["new-session", "-d", "-s", name, "-c", dir, "-x", "200", "-y", "50",
+    ";", "set-option", "@orca_shell", "1", ";", "set-option", "@orca_node", path.relative(root, dir)]);
+  return name;
+}
+
+export function listShells(): Shell[] {
+  try {
+    const out = execFileSync("tmux", ["list-sessions", "-F", "#{@orca_shell}\t#{session_name}\t#{@orca_node}\t#{pane_current_path}\t#{session_created}"], { encoding: "utf8", stdio: "pipe" });
+    return out.split("\n").map((l) => l.split("\t")).filter((f) => f[0] === "1")
+      .map(([, tmux, p, cwd, created]) => ({ tmux, path: p, cwd, created: new Date(Number(created) * 1000).toISOString() }));
+  } catch {
+    return []; // no tmux server running means no shells
+  }
+}
+
+export function closeShell(name: string) {
+  if (!listShells().some((s) => s.tmux === name)) throw new Error(`no shell ${name}`);
+  execFileSync("tmux", ["kill-session", "-t", `=${name}`]);
+}

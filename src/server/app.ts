@@ -9,7 +9,7 @@ import { adoptSession, createNode, docsDir, EditError, endSession, moveNode, rem
 import { PathError } from "../core/paths.ts";
 import { copyToObsidian, listVaults, readObsidian, setObsidian } from "../core/obsidian.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
-import { liveTmuxSessions } from "../core/sessions.ts";
+import { closeShell, launchShell, listShells, liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readTailnet } from "../core/tailscale.ts";
 import { readUsage } from "../core/usage.ts";
@@ -68,6 +68,8 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   copy: (root, b) => ({ copied: copyToObsidian(root, docPath(root, String(b.path ?? ""))) }),
   obsidian: (root, b) => ({ obsidian: setObsidian(root, String(b.vault ?? ""), String(b.folder ?? "")) ?? null }),
   seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),
+  shell: (root, b) => ({ tmux: launchShell(root, String(b.path ?? "")) }),
+  closeshell: (root, b) => (closeShell(String(b.tmux ?? "")), {}),
   park: (root, b) => (setParked(root, String(b.session ?? ""), !!b.park, liveSessionIds(root)), {}),
 };
 const liveSessionIds = (root: string) =>
@@ -91,6 +93,7 @@ export function createServer(root: string) {
     try {
       if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
       if (url.pathname === "/api/seen") return json(res, 200, readSeen(root));
+      if (url.pathname === "/api/shells") return json(res, 200, listShells());
       if (url.pathname === "/api/parked") return json(res, 200, readParked(root));
       if (url.pathname === "/api/obsidian") return json(res, 200, { vaults: listVaults(), obsidian: readObsidian(root) ?? null });
       if (url.pathname === "/api/dispatches") return json(res, 200, listJobs());

@@ -36,6 +36,7 @@ let seen = {}; // sessionId -> finishedAt of the last result you looked at; the 
 let seenText = "";
 let parked = {}; // sessionId -> when you parked it; the server keeps it for every device
 let parkedText = "";
+let shells = []; // plain tmux shells: [{ tmux, path, cwd, created }]
 let jobs = []; // dispatches still being placed, or failed: [{ id, prompt, host, startedAt, error }]
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
@@ -71,8 +72,9 @@ railButton.addEventListener("click", () => {
 
 async function load() {
   fetch("/api/workers").then((r) => r.json()).then((w) => (workerList = w)).catch(() => {});
-  const [res, seenRes, jobsRes, parkedRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches"), fetch("/api/parked")]);
+  const [res, seenRes, jobsRes, parkedRes, shellsRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches"), fetch("/api/parked"), fetch("/api/shells")]);
   jobs = await jobsRes.json();
+  shells = await shellsRes.json();
   const text = await res.text();
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
   const nextParked = await parkedRes.text();
@@ -710,10 +712,10 @@ function renderRail() {
   prompt.title = open?.summary ?? "";
 
   const wasHidden = rail.hidden;
-  rail.hidden = railOff || (!sessions.length && !jobs.length);
+  rail.hidden = railOff || (!sessions.length && !jobs.length && !shells.length);
   // Working sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
-  const groups = { working: jobs.map(jobRow), rest: [], parked: [] };
+  const groups = { working: jobs.map(jobRow), rest: [], parked: [], shells: shells.map(shellRow) };
   for (const s of sessions) groups[isParked(s) ? "parked" : railState(s) === "working" ? "working" : "rest"].push(railRow(s));
   for (const [name, list] of Object.entries(groups)) {
     const section = rail.querySelector(`[data-group="${name}"]`);
@@ -723,6 +725,9 @@ function renderRail() {
   const parkedSection = rail.querySelector('[data-group="parked"]');
   parkedSection.classList.toggle("folded", !parkedOpen);
   parkedSection.querySelector(".fold").textContent = `Parked · ${groups.parked.length}`;
+  const shellsSection = rail.querySelector('[data-group="shells"]');
+  shellsSection.classList.toggle("folded", shellsFolded);
+  shellsSection.querySelector(".fold").textContent = `Shells · ${groups.shells.length}`;
   if (wasHidden !== rail.hidden) relayout(300);
 }
 
@@ -737,6 +742,14 @@ function railRow(s) {
     ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
   </button>${drawer(s)}</li>`;
+}
+
+function shellRow(sh) {
+  const title = byPath.get(sh.path)?.data.title ?? (sh.path || "/");
+  return `<li><button type="button" class="end" data-closeshell="${esc(sh.tmux)}" title="Close this shell">Close</button><button type="button" class="a-ready${term?.name === sh.tmux ? " open" : ""}" data-shell="${esc(sh.tmux)}" data-path="${esc(sh.path)}">
+    <span class="line"><span class="mark">$</span><span class="name">${esc(title)}</span><span class="st">shell</span></span>
+    <span class="meta">${esc(sh.cwd)} · ${ago(sh.created)}</span>
+  </button></li>`;
 }
 
 // Sessions that a parent node started. They stay off the rail; the parent's row lists them in a drawer.
@@ -805,9 +818,23 @@ rail.addEventListener("click", async (e) => {
     await post("park", { session: park.dataset.park, park: !!park.dataset.on }).catch(() => {});
     return load();
   }
-  if (e.target.closest(".fold")) {
-    parkedOpen = !parkedOpen;
-    try { localStorage.setItem("orca.parkedOpen", parkedOpen ? "1" : "0"); } catch {}
+  const closeButton = e.target.closest("[data-closeshell]");
+  if (closeButton) {
+    await post("closeshell", { tmux: closeButton.dataset.closeshell }).catch(() => {});
+    if (term?.name === closeButton.dataset.closeshell) closeTerminal(false);
+    return load();
+  }
+  const shell = e.target.closest("[data-shell]");
+  if (shell) return openTerminal(shell.dataset.shell, shell.dataset.path);
+  const fold = e.target.closest(".fold");
+  if (fold) {
+    if (fold.closest('[data-group="shells"]')) {
+      shellsFolded = !shellsFolded;
+      try { localStorage.setItem("orca.shellsFolded", shellsFolded ? "1" : "0"); } catch {}
+    } else {
+      parkedOpen = !parkedOpen;
+      try { localStorage.setItem("orca.parkedOpen", parkedOpen ? "1" : "0"); } catch {}
+    }
     return renderRail();
   }
   const row = e.target.closest("button[data-sid]");
@@ -823,6 +850,7 @@ rail.addEventListener("click", async (e) => {
 });
 
 let parkedOpen = readFlag("orca.parkedOpen"); // Parked starts folded
+let shellsFolded = readFlag("orca.shellsFolded"); // Shells starts open
 
 // ---- Notifications ----
 
@@ -998,7 +1026,7 @@ function renderSessions(sessions) {
       </span>
     </li>`);
   return `<section class="sessions">
-    <div class="sec-head"><span>Sessions</span><span class="row">${whereSelect()}<button class="resume" type="button">Resume</button><button class="launch" type="button">Launch</button></span></div>
+    <div class="sec-head"><span>Sessions</span><span class="row">${whereSelect()}<button class="shell" type="button" title="Open a terminal in this node's folder">Shell</button><button class="resume" type="button">Resume</button><button class="launch" type="button">Launch</button></span></div>
     ${items.length ? `<ul>${items.join("")}</ul>` : `<div class="none">No sessions</div>`}
   </section>`;
 }
@@ -1058,6 +1086,16 @@ async function launchSession(resume) {
   if (!res.ok) return alertInPanel(body.error);
   await load();
   openTerminal(body.tmux, selected, body.host);
+}
+
+async function openShell(path) {
+  try {
+    const { tmux } = await post("shell", { path });
+    await load();
+    openTerminal(tmux, path);
+  } catch (err) {
+    alertInPanel(err.message);
+  }
 }
 
 // Ending quits Claude; the conversation stays on disk for Resume. A session that is still
@@ -1273,7 +1311,9 @@ document.getElementById("keys").addEventListener("click", () => keyhelp.showModa
 const palette = document.getElementById("palette");
 const paletteInput = palette.querySelector("input");
 const paletteList = palette.querySelector("ol");
-const COMMANDS = []; // { name, run }
+// The current node: the open terminal's, else the selected one, else the map's root.
+const hereNode = () => term?.path ?? selected ?? graphRoot.data.path;
+const COMMANDS = [{ name: "Open shell", run: () => openShell(hereNode()) }]; // { name, run }
 let paletteItems = [];
 let paletteAt = 0;
 
@@ -1698,6 +1738,7 @@ panel.addEventListener("click", (e) => {
   if (finder) popout(finder, selected, "finder");
   if (e.target.closest(".launch")) launchSession(false);
   if (e.target.closest(".resume")) launchSession(true);
+  if (e.target.closest(".shell")) openShell(selected);
   const endButton = e.target.closest("[data-end]");
   if (endButton) endSession(endButton);
   const adopt = e.target.closest("[data-adopt]");
