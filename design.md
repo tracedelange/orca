@@ -190,7 +190,7 @@ A TypeScript CLI. `npm i -g @tdelange/orca` (or `npm link` in a checkout) puts i
 | `orca launch <path> [--resume] [--host]` | Starts Claude in tmux for a node. `--resume` opens the last conversation of the node. `--host` starts it on a worker. |
 | `orca dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. If Haiku is not sure, it lists the choices and stops. |
 | `orca queue <path> ["<task>"]` | Adds a task to the queue of the node. Without a task, it prints the queue. |
-| `orca todo <path> ["<idea>"]`, `--done <n>`, `--all` | Adds an idea to the `TODO.md` of the node, or checks off idea `<n>`. Without an idea, it prints the open ideas with their numbers. `--all` prints the open ideas of every node. `.` is the root. |
+| `orca todo <path> ["<idea>"]`, `--done <n>`, `--undo <n>`, `--edit <n> "<idea>"`, `--all` | Adds an idea to the `TODO.md` of the node, checks off idea `<n>`, opens it again, or changes its text. Without an idea, it prints the open ideas with their numbers. `--all` prints the open ideas of every node. `.` is the root. |
 | `orca end <tmux-name or session-id>` | Ends a session on the hub or on a worker. |
 | `orca claim <path>` or `--auto "<text>" [--scope]` | Attaches the current Claude session to a node. The `/orca` skill runs it. |
 | `orca adopt <session-id>` | Moves a session that runs outside tmux into tmux. |
@@ -281,7 +281,7 @@ A result stays new until the person opens the terminal of that session. The brow
 - End needs a second click when the session is working or needs the person.
 - Todo shows the parked ideas of the node (see Parked ideas).
 
-**Header controls.** The header is its own bar across the top of the page. The rail, the panel, and the terminal start below it. Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form. Todo shows the parked ideas of every node. The `?` button at the right end lists every hotkey.
+**Header controls.** The header is its own bar across the top of the page. The rail, the panel, and the terminal start below it. Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form. Todo, or ⌥T from anywhere, opens the capture dialog (see Parked ideas). The `?` button at the right end lists every hotkey.
 
 **Terminal mode.** When a terminal opens, it fills the space to the right of the rail. The map, the legend, and the panel step aside. A click on another rail row changes the terminal.
 
@@ -376,11 +376,16 @@ A node can keep ideas that are not ready for action in a `TODO.md` in its folder
 
 Done ideas stay in the file. The number of an idea is its place among all ideas in the file, done ones included. New ideas go at the end, so the numbers do not change, and `orca todo <path> --done <n>` is safe for agents.
 
-The viewer shows a list in the panel, from the Todo button or the "Open todo" palette command. The header Todo button shows the lists of all nodes, grouped by node. Each open idea has three actions:
+The header Todo button, ⌥T, and the "New todo" palette command open a capture dialog. The dialog has one line for the idea and puts it under the node in view. A click on its Under field, or ⇧⌘P, opens the palette to pick another node. The Dispatch dialog has the same field, and its × places the task anywhere in the tree. View all shows the lists of all nodes, grouped by node, as the "All todos" palette command does.
 
+The panel Todo button and the "Open todo" palette command show the list of one node. Each open idea has four actions:
+
+- Edit changes its text.
 - Done checks it off.
 - Queue it adds the text to the `## Queue` of the node and checks the idea off with `→ queued`.
 - Make node creates a child node with the text as its title and goal, and checks the idea off with the child path.
+
+Show done shows the done ideas, each with Undo. Undo opens the idea again. A queue task or a child node made from it stays.
 
 The map does not show ideas or counts.
 

@@ -410,11 +410,11 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .issues li::before { content: "! "; color: var(--accent); }
 
 #panel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form[hidden] { display: none; }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form label { display: grid; gap: 5px; }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form input, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form textarea, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form select {
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form[hidden] { display: none; }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form label { display: grid; gap: 5px; }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form input, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form textarea, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form select {
   font: 15px var(--serif);
   color: var(--ink);
   background: var(--paper);
@@ -423,20 +423,20 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   padding: 7px 9px;
   resize: vertical;
 }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form input:focus, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form textarea:focus, :is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form select:focus { outline: none; border-color: var(--ink); }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
-:is(#panel, #dispatcher, #ender, #keyhelp, #settingsdlg) .form .err[hidden] { display: none; }
-:is(#dispatcher, #ender, #keyhelp, #settingsdlg, #palette) {
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form input:focus, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form textarea:focus, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form select:focus { outline: none; border-color: var(--ink); }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
+:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .err[hidden] { display: none; }
+:is(#dispatcher, #todoer, #ender, #keyhelp, #settingsdlg, #palette) {
   width: min(560px, calc(100vw - 32px));
   padding: 0;
   border: 1px solid var(--ink-3);
   background: var(--paper-2);
   color: var(--ink);
 }
-:is(#dispatcher, #ender, #keyhelp, #settingsdlg, #palette)::backdrop { background: rgb(0 0 0 / 0.3); }
-:is(#dispatcher, #ender, #keyhelp, #settingsdlg) .form { border: none; margin: 0; padding: 20px; }
+:is(#dispatcher, #todoer, #ender, #keyhelp, #settingsdlg, #palette)::backdrop { background: rgb(0 0 0 / 0.3); }
+:is(#dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form { border: none; margin: 0; padding: 20px; }
 #settingsdlg .form { padding: 0; gap: 0; }
 #settingsdlg h2 { margin: 0; padding: 20px 20px 0; font: 600 22px var(--serif); }
 #settingsdlg .tabs { display: flex; gap: 22px; padding: 0 20px; margin-top: 14px; border-bottom: 1px solid var(--ink-3); }
@@ -542,9 +542,15 @@ a.button { display: inline-block; text-decoration: none; }
 .md code { font: 13px var(--mono); }
 .md pre { font: 12px/1.5 var(--mono); padding: 12px; border: 1px solid var(--ink-3); overflow-x: auto; }
 .md a { color: var(--ink); }
-#dispatcher .parent { margin: 0 0 10px; font: 12px var(--sans); color: var(--ink-2); }
-#dispatcher .parent b { font-weight: 500; color: var(--ink); }
-#dispatcher .parent .unparent { padding: 0 6px; margin-left: 4px; line-height: 16px; }
+/* The node field of Dispatch and Todo: a row like an input that opens the palette to pick a node. */
+.nodefield { display: grid; grid-template-columns: 1fr auto; gap: 5px 8px; }
+.nodefield > span { grid-column: 1 / -1; font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.nodefield .pick { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 9px; text-align: left; font: 15px var(--serif); letter-spacing: 0; text-transform: none; color: var(--ink); background: var(--paper); }
+.nodefield .pick b { font-weight: 600; white-space: nowrap; }
+.nodefield .pick small { min-width: 0; font: 12px var(--sans); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nodefield .pick::after { content: "Change · ⇧⌘P"; margin-left: auto; padding-left: 10px; flex: none; font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.nodefield .clear { padding: 0 12px; font-size: 14px; }
+.nodefield .clear[hidden] { display: none; }
 #panel .queue { margin: 0 0 22px; }
 #panel .queue ol { list-style: none; margin: 0; padding: 0; }
 #panel .queue li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--rule); font: 13px var(--sans); }
@@ -560,4 +566,8 @@ a.button { display: inline-block; text-decoration: none; }
 #panel .queue .qadd input { flex: 1; min-width: 0; }
 #panel .queue .row button { padding: 2px 6px; font-size: 10px; }
 #panel .queue .sec-head { margin-top: 14px; }
+#panel .todo li { flex-wrap: wrap; }
+#panel .todo li .row { flex-basis: 100%; display: flex; gap: 6px; padding-left: 22px; }
+#panel .todo .tedit input { width: 100%; font: inherit; }
+#panel .todo .tnew { margin-top: 10px; }
 #panel .todo-err { margin: 6px 0 0; font: 12px var(--sans); color: var(--accent); }

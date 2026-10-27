@@ -12,7 +12,7 @@ import { addToQueue, runQueues } from "../core/queue.ts";
 import { closeShell, launchShell, listShells, liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readTailnet } from "../core/tailscale.ts";
-import { addTodo, allTodos, doneTodo, nodeTodo, queueTodo, readTodos } from "../core/todo.ts";
+import { addTodo, allTodos, doneTodo, editTodo, nodeTodo, queueTodo, readTodos, undoTodo } from "../core/todo.ts";
 import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, SAFE, startSession, type WorkerState } from "../core/workers.ts";
@@ -62,6 +62,8 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
   todo: (root, b) => (addTodo(root, b.path, String(b.idea ?? "")), {}),
   tododone: (root, b) => (doneTodo(root, b.path, Number(b.n)), {}),
+  todoundo: (root, b) => (undoTodo(root, b.path, Number(b.n)), {}),
+  todoedit: (root, b) => (editTodo(root, b.path, Number(b.n), String(b.idea ?? "")), {}),
   todoqueue: (root, b) => (queueTodo(root, b.path, Number(b.n)), {}),
   todonode: (root, b) => ({ path: nodeTodo(root, b.path, Number(b.n)) }),
   // Opens a document in the Mac's default app for its type.

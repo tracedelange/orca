@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { EditError } from "../src/core/edit.ts";
 import { queueItems } from "../src/core/queue.ts";
-import { addTodo, allTodos, doneTodo, nodeTodo, queueTodo, readTodos } from "../src/core/todo.ts";
+import { addTodo, allTodos, doneTodo, editTodo, nodeTodo, queueTodo, readTodos, undoTodo } from "../src/core/todo.ts";
 
 function seededRoot(): string {
   const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orca-")), "nodes");
@@ -37,6 +37,20 @@ test("queueTodo moves an item to the queue; nodeTodo makes a child node", () => 
   assert.match(fs.readFileSync(path.join(root, "work/rewrite-the-parser/CLAUDE.md"), "utf8"), /title: Rewrite the parser/);
   assert.deepEqual(readTodos(root, "work").map((t) => t.to), ["queued", "work/rewrite-the-parser"]);
   assert.throws(() => queueTodo(root, "work", 1), /no open item 1/);
+});
+
+test("editTodo keeps the mark and the destination; undoTodo reopens a done item", () => {
+  const root = seededRoot();
+  addTodo(root, "work", "Rewrite the parser");
+  addTodo(root, "work", "tpyo");
+  nodeTodo(root, "work", 1);
+  editTodo(root, "work", 1, "Rewrite the lexer");
+  editTodo(root, "work", 2, "typo");
+  assert.deepEqual(readTodos(root, "work").map((t) => [t.done, t.text, t.to]), [[true, "Rewrite the lexer", "work/rewrite-the-parser"], [false, "typo", undefined]]);
+  undoTodo(root, "work", 1);
+  assert.deepEqual(readTodos(root, "work")[0], { n: 1, done: false, text: "Rewrite the lexer", to: undefined });
+  assert.throws(() => undoTodo(root, "work", 1), /not done/);
+  assert.throws(() => editTodo(root, "work", 2, " "), /empty/);
 });
 
 test("allTodos groups items by node, root included", () => {

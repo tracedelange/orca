@@ -20,7 +20,7 @@
     <button id="about" type="button">Info</button>
     <button id="new" type="button">New</button>
     <button id="dispatch" type="button">Dispatch</button>
-    <button id="todos" type="button" title="Parked ideas of every node">Todo</button>
+    <button id="todos" type="button" title="Park an idea (⌥T)">Todo</button>
     <button id="railbtn" type="button" title="Show or hide the sessions rail">Rail</button>
     <button id="archived" type="button" title="Show archived nodes">Archived</button>
     <button id="mapbtn" type="button">Map</button>
@@ -55,12 +55,22 @@
 
   <aside id="panel" hidden></aside>
 
-  <!-- Dispatch: ⌘K from anywhere. Haiku places the task under the parent, or in the whole tree once the parent is dismissed. -->
+  <!-- Dispatch: ⌘K from anywhere. Haiku places the task under the chosen node, or anywhere in the tree after ×. -->
   <dialog id="dispatcher">
     <form class="form">
-      <p class="parent" hidden>Under <b></b> <button class="unparent" type="button" title="Place it anywhere in the tree">×</button></p>
+      <div class="nodefield"><span>Under</span><button class="pick" type="button" title="Choose another node (⇧⌘P)"><b></b><small></small></button><button class="clear" type="button" title="Place it anywhere in the tree">×</button></div>
       <label><span>What needs doing?</span><textarea name="prompt" rows="6" required placeholder="Plain instructions. Orca files it into the tree and starts Claude on it."></textarea></label>
       <div class="row"><button type="submit">Dispatch</button><button class="cancel" type="button">Cancel</button><span class="where-slot"></span><span class="hint">⌘↵</span></div>
+      <p class="err" hidden></p>
+    </form>
+  </dialog>
+
+  <!-- Todo: ⌥T from anywhere. Parks an idea in the TODO.md of a node, the one in view unless another is picked. -->
+  <dialog id="todoer">
+    <form class="form">
+      <div class="nodefield"><span>Under</span><button class="pick" type="button" title="Choose another node (⇧⌘P)"><b></b><small></small></button></div>
+      <label><span>What's the idea?</span><input name="idea" autocomplete="off" required placeholder="Park it here. Nothing runs it."></label>
+      <div class="row"><button type="submit">Park</button><button class="cancel" type="button">Cancel</button><button class="viewall" type="button">View all</button><span class="hint">↵</span></div>
       <p class="err" hidden></p>
     </form>
   </dialog>
@@ -86,6 +96,7 @@
         <tr><th>⌘K</th><td>Dispatch a task, from anywhere</td></tr>
         <tr><th>⇧⌘P</th><td>Find and resume a node; type &gt; for commands</td></tr>
         <tr><th>/</th><td>Dispatch a task, on the map</td></tr>
+        <tr><th>⌥T</th><td>Park an idea in a node's todo list, from anywhere</td></tr>
         <tr><th>f</th><td>Fit the map to the screen</td></tr>
         <tr><th>⌘.</th><td>Toggle between the map and the last terminal</td></tr>
         <tr><th>Esc</th><td>Back to the map, or close the panel</td></tr>

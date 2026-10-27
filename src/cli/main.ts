@@ -8,7 +8,7 @@ import { adoptSession, createNode, endSession, moveNode, removeNode, updateNode 
 import { hooksInstalled, installHooks, installSkill, USER_SETTINGS, USER_SKILL } from "../core/install.ts";
 import { resolveInRoot, rootDir } from "../core/paths.ts";
 import { addToQueue, queueItems } from "../core/queue.ts";
-import { addTodo, allTodos, doneTodo, readTodos } from "../core/todo.ts";
+import { addTodo, allTodos, doneTodo, editTodo, readTodos, undoTodo } from "../core/todo.ts";
 import { claim, claimedNodeDir, findClaudePid } from "../core/claims.ts";
 import { dropSession, liveTmuxSessions, readSessions, tmuxBase } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
@@ -80,12 +80,12 @@ function queue(argv: string[]) {
   for (const i of queueItems(fs.readFileSync(file, "utf8"))) console.log(`[${i.mark}] ${i.text}${i.child ? ` → ${i.child}` : ""}`);
 }
 
-// Parked ideas in a node's TODO.md: adds one, checks one off, or lists the open ones. "." is the root.
+// Parked ideas in a node's TODO.md: adds, edits, checks off or reopens one, or lists the open ones. "." is the root.
 function todo(argv: string[]) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { done: { type: "string" }, all: { type: "boolean" } },
+    options: { done: { type: "string" }, undo: { type: "string" }, edit: { type: "string" }, all: { type: "boolean" } },
   });
   requireRoot();
   const print = (items: ReturnType<typeof readTodos>) => items.filter((t) => !t.done).forEach((t) => console.log(`${t.n}. ${t.text}`));
@@ -93,10 +93,12 @@ function todo(argv: string[]) {
     for (const g of allTodos(root).filter((g) => g.items.some((t) => !t.done))) console.log(g.path || "/"), print(g.items);
     return;
   }
-  if (!positionals.length) throw new Error('usage: orca todo <path> ["idea"] | orca todo <path> --done <n> | orca todo --all');
+  if (!positionals.length) throw new Error('usage: orca todo <path> ["idea"] | orca todo <path> --done|--undo <n> | orca todo <path> --edit <n> "idea" | orca todo --all');
   const [first, ...idea] = positionals;
   const rel = first === "." ? "" : first.replace(/^\/+|\/+$/g, "");
   if (values.done) return console.log(`done: ${doneTodo(root, rel, Number(values.done))}`);
+  if (values.undo) return undoTodo(root, rel, Number(values.undo));
+  if (values.edit) return editTodo(root, rel, Number(values.edit), idea.join(" "));
   if (idea.length) return addTodo(root, rel, idea.join(" "));
   print(readTodos(root, rel));
 }

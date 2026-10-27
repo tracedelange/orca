@@ -49,18 +49,39 @@ export function addTodo(root: string, rel: string, idea: string) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// Checks off item `n`, noting where it went (`queued` or a child path). Returns the item's text.
-export function doneTodo(root: string, rel: string, n: number, to?: string): string {
+// Rewrites the line of item `n` with `change`, which gets the item and returns its new line.
+function rewrite(root: string, rel: string, n: number, change: (done: boolean, text: string, to?: string) => string) {
   const file = fileOf(root, rel);
   const lines = readLines(file);
   let seen = 0;
   const at = lines.findIndex((l) => ITEM.test(l) && ++seen === n);
   if (at === -1) throw new EditError(`no item ${n} in ${rel || "/"}`);
-  const [, mark, text] = lines[at].match(ITEM)!;
-  if (mark === "x") throw new EditError(`item ${n} is already done`);
-  lines[at] = `- [x] ${text}${to ? ` → ${to}` : ""}`;
+  const [, mark, text, to] = lines[at].match(ITEM)!;
+  lines[at] = change(mark === "x", text, to);
   fs.writeFileSync(file, lines.join("\n"));
   return text;
+}
+
+// Checks off item `n`, noting where it went (`queued` or a child path). Returns the item's text.
+export function doneTodo(root: string, rel: string, n: number, to?: string): string {
+  return rewrite(root, rel, n, (done, text) => {
+    if (done) throw new EditError(`item ${n} is already done`);
+    return `- [x] ${text}${to ? ` → ${to}` : ""}`;
+  });
+}
+
+// Opens item `n` again. A queue task or child node made from it stays.
+export function undoTodo(root: string, rel: string, n: number) {
+  rewrite(root, rel, n, (done, text) => {
+    if (!done) throw new EditError(`item ${n} is not done`);
+    return `- [ ] ${text}`;
+  });
+}
+
+export function editTodo(root: string, rel: string, n: number, idea: string) {
+  const text = idea.trim().replace(/\s+/g, " ");
+  if (!text) throw new EditError("idea is empty");
+  rewrite(root, rel, n, (done, _, to) => `- [${done ? "x" : " "}] ${text}${to ? ` → ${to}` : ""}`);
 }
 
 // Moves item `n` into the node's ## Queue, where a background worker picks it up.

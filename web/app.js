@@ -1083,12 +1083,13 @@ async function renderTodos() {
   const groups = await (await fetch(`/api/todos${todoScope === null ? "" : `?path=${encodeURIComponent(todoScope)}`}`)).json();
   const lists = groups.map((g) => {
     const rows = g.items.filter((t) => todoDone || !t.done).map((t) => `
-      <li class="${t.done ? "j-done" : ""}">
+      <li class="${t.done ? "j-done" : ""}" data-path="${esc(g.path)}" data-n="${t.n}">
         <span class="mark">${t.done ? "✓" : "○"}</span>
         <span class="text">${esc(t.text)}</span>
-        ${!t.done ? `<span class="row" data-path="${esc(g.path)}" data-n="${t.n}"><button type="button" data-todo="tododone">Done</button><button type="button" data-todo="todoqueue">Queue it</button><button type="button" data-todo="todonode">Make node</button></span>`
-          : t.to === "queued" ? `<span class="st">queued</span>`
+        ${t.to === "queued" ? `<span class="st">queued</span>`
           : t.to ? `<button class="child" type="button" data-reveal="${esc(t.to)}" title="${esc(t.to)}">${esc(t.to.split("/").pop())}</button>` : ""}
+        <span class="row">${t.done ? `<button type="button" data-todo="todoundo">Undo</button>`
+          : `<button type="button" class="tedit-open">Edit</button><button type="button" data-todo="tododone">Done</button><button type="button" data-todo="todoqueue">Queue it</button><button type="button" data-todo="todonode">Make node</button>`}</span>
       </li>`);
     if (!rows.length) return "";
     const head = todoScope === null ? `<div class="sec-head"><button class="child" type="button" data-reveal="${esc(g.path)}">${esc(g.title)}</button></div>` : "";
@@ -1098,17 +1099,32 @@ async function renderTodos() {
     <div class="top"><button class="back" type="button">← ${esc(panelNode.title)}</button><span><label><input type="checkbox" class="tshowdone"${todoDone ? " checked" : ""}> Show done</label> <button class="close" type="button">Close</button></span></div>
     <p class="kicker">${esc(todoScope === null ? "every node" : todoScope || "/")}</p>
     <h1>Todo</h1>
-    <section class="queue">
+    <section class="queue todo">
       ${lists || `<div class="none">No parked ideas</div>`}
-      <form class="qadd tadd"><input name="idea" placeholder="Park an idea${todoScope === null ? " at the root" : ""}." autocomplete="off" required><button type="submit">Add</button></form>
+      ${todoScope === null ? `<button class="tnew" type="button">New idea</button>`
+        : `<form class="qadd tadd"><input name="idea" placeholder="Park an idea." autocomplete="off" required><button type="submit">Add</button></form>`}
       <p class="todo-err" hidden></p>
     </section>`;
 }
 
 const todoError = (msg) => Object.assign(panel.querySelector(".todo-err"), { textContent: msg, hidden: false });
 
+// Turns an idea's text into an input. Enter saves it; Escape puts the list back.
+function editIdea(li) {
+  const text = li.querySelector(".text");
+  text.innerHTML = `<form class="tedit"><input name="idea" value="${esc(text.textContent)}" autocomplete="off" required></form>`;
+  const input = text.querySelector("input");
+  input.focus();
+  input.select();
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    e.stopPropagation();
+    renderTodos();
+  });
+}
+
 async function todoAction(button) {
-  const { path, n } = button.parentElement.dataset;
+  const { path, n } = button.closest("li").dataset;
   try {
     const out = await post(button.dataset.todo, { path, n: Number(n) });
     if (out.path) {
@@ -1342,15 +1358,25 @@ quickAdd.addEventListener("submit", async (e) => {
 
 const dispatcher = document.getElementById("dispatcher");
 const dispatchForm = dispatcher.querySelector("form");
-const parentLine = dispatchForm.querySelector(".parent");
-let dispatchScope = ""; // the parent: the node in view, until dismissed
+// The node field of Dispatch and Todo. `null` shows "anywhere"; × clears to it, where a form has one.
+function showNode(form, p) {
+  const field = form.querySelector(".nodefield");
+  field.querySelector("b").textContent = p === null ? "Anywhere in the tree" : byPath.get(p)?.data.title ?? (p || "/");
+  field.querySelector("small").textContent = p === null ? "" : p || "/";
+  const clear = field.querySelector(".clear");
+  if (clear) clear.hidden = p === null;
+}
+
+let dispatchScope = ""; // the parent: the node in view, until cleared; "" is the whole tree
 function setScope(p) {
   dispatchScope = p;
-  parentLine.hidden = !p;
-  parentLine.querySelector("b").textContent = byPath.get(p)?.data.title ?? p;
-  parentLine.querySelector("b").title = p;
+  showNode(dispatchForm, p || null);
 }
-parentLine.querySelector(".unparent").addEventListener("click", () => {
+dispatchForm.querySelector(".pick").addEventListener("click", () => openPalette((p) => {
+  setScope(p);
+  dispatchForm.prompt.focus();
+}));
+dispatchForm.querySelector(".clear").addEventListener("click", () => {
   setScope("");
   dispatchForm.prompt.focus();
 });
@@ -1364,6 +1390,46 @@ function openDispatch() {
   dispatchForm.prompt.focus();
 }
 dispatchForm.querySelector(".cancel").addEventListener("click", () => dispatcher.close());
+
+// ---- Todo capture: ⌥T from anywhere parks an idea in a node's TODO.md, the node in view by default ----
+
+const todoer = document.getElementById("todoer");
+const todoForm = todoer.querySelector("form");
+let todoTarget = "";
+function setTodoTarget(p) {
+  todoTarget = p;
+  showNode(todoForm, p);
+}
+function openTodoer() {
+  if (todoer.open || !tree) return;
+  todoForm.reset();
+  setTodoTarget(hereNode());
+  todoForm.querySelector(".err").hidden = true;
+  todoer.showModal();
+  todoForm.idea.focus();
+}
+todoForm.querySelector(".pick").addEventListener("click", () => openPalette((p) => {
+  setTodoTarget(p);
+  todoForm.idea.focus();
+}));
+todoForm.querySelector(".cancel").addEventListener("click", () => todoer.close());
+todoForm.querySelector(".viewall").addEventListener("click", () => {
+  todoer.close();
+  openTodos(null);
+});
+todoForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await post("todo", { path: todoTarget, idea: todoForm.idea.value });
+  } catch (err) {
+    const el = todoForm.querySelector(".err");
+    el.textContent = err.message;
+    el.hidden = false;
+    return;
+  }
+  todoer.close();
+  if (panel.querySelector(".todo")) renderTodos(); // a list is open: show the new idea
+});
 
 // ⌥Q ends the current rail session, as its End button does, once Enter confirms.
 const ender = document.getElementById("ender");
@@ -1389,13 +1455,19 @@ const paletteList = palette.querySelector("ol");
 const hereNode = () => term?.path ?? selected ?? graphRoot.data.path;
 const COMMANDS = [ // { name, run }
   { name: "Open shell", run: () => openShell(hereNode()) },
+  { name: "New todo", run: () => openTodoer() },
   { name: "Open todo", run: () => openTodos(hereNode()) },
+  { name: "All todos", run: () => openTodos(null) },
 ];
 let paletteItems = [];
 let paletteAt = 0;
 
-function openPalette() {
+// With `pick`, the palette finds a node for another dialog and hands its path to `pick`.
+let palettePick = null;
+function openPalette(pick = null) {
   if (palette.open || !tree) return;
+  palettePick = pick;
+  paletteInput.placeholder = pick ? "Find a node" : "Find a node · > for commands";
   paletteInput.value = "";
   renderPalette();
   palette.showModal();
@@ -1415,7 +1487,7 @@ function rank(q, d) {
 
 function renderPalette() {
   const q = paletteInput.value.trim().toLowerCase();
-  const commands = q.startsWith(">");
+  const commands = !palettePick && q.startsWith(">");
   if (commands) {
     const c = q.slice(1).trim();
     paletteItems = COMMANDS.filter((x) => x.name.toLowerCase().includes(c)).map((x) => ({ label: x.name, run: x.run }));
@@ -1429,7 +1501,7 @@ function renderPalette() {
         label: d.data.title,
         path: d.data.path || "/",
         state: d.data.sessions.length ? mostUrgent(withNode(d)) : null,
-        run: () => resumeNode(d.data.path),
+        run: () => (palettePick ?? resumeNode)(d.data.path),
       }));
   }
   paletteAt = 0;
@@ -1587,6 +1659,15 @@ panel.addEventListener("keydown", (e) => {
 
 panel.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (e.target.matches(".tedit")) {
+    const { path, n } = e.target.closest("li").dataset;
+    try {
+      await post("todoedit", { path, n: Number(n), idea: e.target.idea.value });
+    } catch (err) {
+      return todoError(err.message);
+    }
+    return renderTodos();
+  }
   if (e.target.matches(".tadd")) {
     try {
       await post("todo", { path: todoScope ?? "", idea: e.target.idea.value });
@@ -1642,7 +1723,7 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   // These keys belong to orca, not Claude; stop them so the page handlers do not act on them twice.
   xterm.attachCustomKeyEventHandler((e) => {
     // ⌥Q types œ on a Mac, so match the physical key.
-    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k" || e.code === "KeyP")) || (e.altKey && (e.key === "Tab" || e.code === "KeyQ"))) e.stopPropagation();
+    if (e.key === "Escape" || (e.metaKey && (e.key === "." || e.key === "k" || e.code === "KeyP")) || (e.altKey && (e.key === "Tab" || e.code === "KeyQ" || e.code === "KeyT"))) e.stopPropagation();
     if (e.code === "KeyP" && e.metaKey && e.shiftKey) {
       e.preventDefault();
       if (e.type === "keydown") openPalette();
@@ -1651,6 +1732,11 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
     if (e.code === "KeyQ" && e.altKey) {
       e.preventDefault();
       if (e.type === "keydown") confirmEnd();
+      return false;
+    }
+    if (e.code === "KeyT" && e.altKey) {
+      e.preventDefault();
+      if (e.type === "keydown") openTodoer();
       return false;
     }
     if (e.key === "Tab" && e.altKey) {
@@ -1822,6 +1908,8 @@ panel.addEventListener("click", (e) => {
   const finder = e.target.closest(".finder");
   if (finder) popout(finder, selected, "finder");
   if (e.target.closest(".todos")) openTodos(selected);
+  if (e.target.closest(".tedit-open")) editIdea(e.target.closest("li"));
+  if (e.target.closest(".tnew")) openTodoer();
   const todo = e.target.closest("[data-todo]");
   if (todo) todoAction(todo);
   if (e.target.matches(".tshowdone")) {
@@ -1885,7 +1973,7 @@ addEventListener("hashchange", () => {
   applyRoot();
 });
 document.getElementById("mapbtn").addEventListener("click", () => term && closeTerminal());
-document.getElementById("todos").addEventListener("click", () => openTodos(null));
+document.getElementById("todos").addEventListener("click", () => openTodoer());
 addEventListener("resize", () => relayout(0));
 addEventListener("keydown", (e) => {
   if (e.key === "k" && e.metaKey) {
@@ -1894,9 +1982,15 @@ addEventListener("keydown", (e) => {
   }
   if (e.code === "KeyP" && e.metaKey && e.shiftKey) {
     e.preventDefault();
-    return openPalette();
+    // In Dispatch or Todo, it picks the node of that dialog.
+    const pick = [dispatcher, todoer].find((d) => d.open)?.querySelector(".pick");
+    return pick ? pick.click() : openPalette();
   }
-  if (dispatcher.open || ender.open || keyhelp.open || settings.open || palette.open) return; // the dialogs handle their own Escape
+  if (dispatcher.open || todoer.open || ender.open || keyhelp.open || settings.open || palette.open) return; // the dialogs handle their own Escape
+  if (e.code === "KeyT" && e.altKey) {
+    e.preventDefault();
+    return openTodoer();
+  }
   if (e.code === "KeyQ" && e.altKey) {
     e.preventDefault();
     return confirmEnd();

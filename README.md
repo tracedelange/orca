@@ -145,7 +145,8 @@ orca launch work/vmt --resume               # reopen the last conversation of th
 orca dispatch work "..."                    # let Haiku pick or make a node under work, then start Claude
 orca queue work/vmt "..."                   # add a task to the queue of the node
 orca todo work/vmt "..."                    # park an idea in the TODO.md of the node ("." is the root)
-orca todo work/vmt --done 2                 # check off idea 2
+orca todo work/vmt --done 2                 # check off idea 2 (--undo 2 opens it again)
+orca todo work/vmt --edit 2 "..."           # change the text of idea 2
 orca todo --all                             # list the open ideas of every node
 orca wait work/vmt                          # wait until the child session stops or asks, then show its screen
 orca send work/vmt "..."                    # type a reply into the child session
@@ -215,7 +216,8 @@ orca dispatch work "..." --host my-worker
 - **New** opens a form to add a child to the root.
 - **Edit**, **Add child**, **Move**, and **Delete** in the panel do the same work as `orca set`, `new`, `mv`, and `rm`.
 - **Queue** in the panel adds tasks to the `## Queue` section of the node, one task on each line. The server starts a background session for each task, 2 at a time. Each background session is a child node. If the node has a repo, the session works in its own git worktree. When the session stops, the server merges its branch into your checkout and marks the task as done. Background sessions stay off the rail unless they need you. The queue moves only while the server runs.
-- **Todo** in the panel, or **Open todo** in the palette, shows the parked ideas of the node. Each idea has Done, Queue it, and Make node. Queue it moves the idea to the queue of the node. Make node creates a child node with the idea as its title and goal. Done ideas stay in `TODO.md`, and Show done shows them. **Todo** in the header shows the ideas of every node, and adds new ideas to the root.
+- **Todo** in the header, or ⌥T from anywhere, opens a small dialog to park an idea. The idea goes to the node in view. To pick another node, click the Under field or press ⇧⌘P. Dispatch has the same field. View all shows the ideas of every node.
+- **Todo** in the panel, or **Open todo** in the palette, shows the parked ideas of the node. Each idea has Edit, Done, Queue it, and Make node. Queue it moves the idea to the queue of the node. Make node creates a child node with the idea as its title and goal. Done ideas stay in `TODO.md`. Show done shows them, each with Undo.
 
 ## Development
 

@@ -46,7 +46,11 @@ test("todo adds ideas, checks them off and lists the open ones", () => {
   orca("todo", ".", "At the root");
   assert.match(orca("todo", "work", "--done", "1"), /done: Park this/);
   assert.equal(orca("todo", "work"), "2. And this\n");
-  assert.equal(orca("todo", "--all"), "/\n1. At the root\nwork\n2. And this\n");
+  orca("todo", "work", "--undo", "1");
+  orca("todo", "work", "--edit", "2", "And", "that");
+  assert.equal(orca("todo", "work"), "1. Park this\n2. And that\n");
+  orca("todo", "work", "--done", "1");
+  assert.equal(orca("todo", "--all"), "/\n1. At the root\nwork\n2. And that\n");
   fails(["todo"], /usage: orca todo/);
 });
 
