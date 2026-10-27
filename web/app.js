@@ -1490,7 +1490,7 @@ function renderPalette() {
   const commands = !palettePick && q.startsWith(">");
   if (commands) {
     const c = q.slice(1).trim();
-    paletteItems = COMMANDS.filter((x) => x.name.toLowerCase().includes(c)).map((x) => ({ label: x.name, run: x.run }));
+    paletteItems = [...COMMANDS, ...tailnetCommands()].filter((x) => x.name.toLowerCase().includes(c)).map((x) => ({ label: x.name, run: x.run }));
   } else {
     // With no query, nodes with live sessions come first.
     paletteItems = tree.descendants()
@@ -2018,12 +2018,26 @@ addEventListener("keydown", (e) => {
 // ---- Plan usage ----
 
 // Same windows as the Hammerspoon panel: 5h counts down to its reset, the week names the reset day.
+// One "Switch tailnet" command per other Tailscale account, while the tailnet is shown.
+let tailnetProfiles = [];
+function tailnetCommands() {
+  if (!showTailnet) return [];
+  return tailnetProfiles.filter((p) => !p.selected).map((p) => ({ name: `Switch tailnet: ${p.tailnet}`, run: () => switchTailnet(p.id) }));
+}
+
+async function switchTailnet(id) {
+  net.innerHTML = "<b>tailnet</b>switching…";
+  await fetch(`/api/tailnet/switch?id=${encodeURIComponent(id)}`, { method: "POST" }).catch(() => {});
+  loadTailnet().then(loadUsage);
+}
+
 // The tailnet leads the usage card. "Running" shows its name; anything else shows the state, in the accent.
 const net = document.createElement("span");
 async function loadTailnet() {
   net.hidden = !showTailnet;
   if (!showTailnet) return;
   const t = await fetch("/api/tailnet").then((r) => r.json()).catch(() => ({ state: "unavailable" }));
+  tailnetProfiles = t.profiles ?? [];
   const up = t.state === "Running";
   net.className = up ? "" : "hot";
   net.title = t.login ? `Tailscale: ${t.login}` : "Tailscale";

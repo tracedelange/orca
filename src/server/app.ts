@@ -11,7 +11,7 @@ import { copyToObsidian, listVaults, readObsidian, setObsidian } from "../core/o
 import { addToQueue, runQueues } from "../core/queue.ts";
 import { closeShell, launchShell, listShells, liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
-import { readTailnet } from "../core/tailscale.ts";
+import { readTailnet, switchTailnet } from "../core/tailscale.ts";
 import { addTodo, allTodos, doneTodo, editTodo, nodeTodo, queueTodo, readTodos, undoTodo } from "../core/todo.ts";
 import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
@@ -105,6 +105,11 @@ export function createServer(root: string) {
       if (url.pathname === "/api/obsidian") return json(res, 200, { vaults: listVaults(), obsidian: readObsidian(root) ?? null });
       if (url.pathname === "/api/dispatches") return json(res, 200, listJobs());
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
+      if (url.pathname === "/api/tailnet/switch") {
+        if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
+        await switchTailnet(url.searchParams.get("id") ?? "");
+        return json(res, 200, { ok: true });
+      }
       if (url.pathname === "/api/tailnet") return json(res, 200, await readTailnet().catch(() => ({ state: "unavailable" })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
