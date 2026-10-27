@@ -32,7 +32,7 @@ When you change a node, add a dated line to its Log.
 You answer the questions of child nodes you dispatch; ask the user only when you can't. See `orca help`.
 
 ## Node folders
-A node folder holds context only: its `CLAUDE.md` and a `docs/` folder of Markdown, text, images and PDFs.
+A node folder holds context only: its `CLAUDE.md`, a `TODO.md` of parked ideas (`orca todo`; read it only when asked), and a `docs/` folder of Markdown, text, images and PDFs.
 Code, scripts, builds and dependencies go in a repo outside this tree. Name it in `repo:`.
 Write documents for the user (plans, reports, reviews) in `docs/`, and give each file's full path in your reply.
 

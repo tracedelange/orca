@@ -39,6 +39,17 @@ test("queue adds tasks and lists them", () => {
   fails(["queue"], /usage: orca queue/);
 });
 
+test("todo adds ideas, checks them off and lists the open ones", () => {
+  const { orca, fails } = setup();
+  orca("todo", "work", "Park", "this");
+  orca("todo", "work", "And this");
+  orca("todo", ".", "At the root");
+  assert.match(orca("todo", "work", "--done", "1"), /done: Park this/);
+  assert.equal(orca("todo", "work"), "2. And this\n");
+  assert.equal(orca("todo", "--all"), "/\n1. At the root\nwork\n2. And this\n");
+  fails(["todo"], /usage: orca todo/);
+});
+
 test("mv, rm and set change the tree", () => {
   const { root, orca, fails } = setup();
   assert.match(orca("mv", "home/household", "work/household"), /moved to work\/household/);

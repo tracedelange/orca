@@ -69,20 +69,23 @@ button.on { color: var(--paper); background: var(--ink); border-color: var(--ink
 button.danger { color: var(--accent); border-color: var(--accent); }
 button:disabled { opacity: 0.4; cursor: default; }
 
+/* The header is its own bar across the top. The map runs under it; the rail, panel and terminal start below it. */
+:root { --bar: 64px; }
 header {
   position: fixed;
-  top: 20px;
-  left: 24px;
-  right: 24px;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 4;
+  height: var(--bar);
+  padding: 0 24px;
   display: flex;
   align-items: center;
   gap: 16px;
-  pointer-events: none;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--ink-3);
 }
-header > * { pointer-events: auto; flex-shrink: 0; }
-/* The open panel takes the right 420px, so the header ends where the panel starts. */
-body:not(.mode-term):has(#panel:not([hidden])) header { right: 444px; }
+header > * { flex-shrink: 0; }
 #crumbs { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #mapbtn { display: none; }
 /* The icon is a mask so it takes the theme's ink colour. */
@@ -93,8 +96,6 @@ body:not(.mode-term):has(#panel:not([hidden])) header { right: 444px; }
 #usage b { font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.14em; margin-right: 6px; }
 #usage i { display: inline-block; vertical-align: middle; width: 48px; height: 3px; margin-right: 6px; text-decoration: none;
   background: linear-gradient(90deg, var(--ink-2) var(--pct), var(--ink-3) var(--pct)); opacity: 0.8; }
-/* On the map the header floats over nodes, so the usage line gets a solid card like the panel. */
-body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(--ink-3); padding: 5px 10px; }
 #usage .who { color: var(--ink-3); }
 #usage .hot { color: var(--accent); }
 #usage .hot i { background: linear-gradient(90deg, var(--accent) var(--pct), var(--ink-3) var(--pct)); }
@@ -105,7 +106,7 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 .mode-term #mapbtn { display: inline-block; }
 #termview {
   position: fixed;
-  top: 56px;
+  top: var(--bar);
   right: 0;
   bottom: 0;
   z-index: 3;
@@ -114,7 +115,6 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
   padding: 8px 24px 16px;
   background: var(--paper-2);
   border-left: 1px solid var(--ink-3);
-  border-top: 1px solid var(--ink-3);
 }
 #termview[hidden] { display: none; }
 #termview .top { display: flex; justify-content: space-between; gap: 16px; font: 11px var(--sans); color: var(--ink-3); padding-bottom: 8px; }
@@ -274,7 +274,7 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
 /* Rail */
 #rail {
   position: fixed;
-  top: 64px;
+  top: var(--bar);
   left: 0;
   bottom: 124px;
   z-index: 2;
@@ -284,9 +284,9 @@ body:not(.mode-term) #usage { background: var(--paper-2); border: 1px solid var(
   padding: 0 12px 0 24px;
 }
 #rail[hidden] { display: none; }
-/* On the map the rail floats over nodes, so it gets the same solid card as the usage line. */
+/* On the map the rail floats over nodes, so it gets a solid card like the panel. */
 /* It ends 20px above the legend (160px tall, 20px from the bottom). */
-body:not(.mode-term) #rail { bottom: 200px; background: var(--paper-2); border: 1px solid var(--ink-3); border-left: none; }
+body:not(.mode-term) #rail { bottom: 200px; background: var(--paper-2); border: 1px solid var(--ink-3); border-left: none; border-top: none; }
 #rail .rail-head {
   font: 500 10px var(--sans);
   letter-spacing: 0.2em;
@@ -379,7 +379,7 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 /* Detail panel */
 #panel {
   position: fixed;
-  top: 0;
+  top: var(--bar);
   right: 0;
   bottom: 0;
   z-index: 3;
@@ -558,3 +558,6 @@ a.button { display: inline-block; text-decoration: none; }
 #panel .queue .j-done .text { color: var(--ink-2); }
 #panel .queue .qadd { display: flex; gap: 8px; margin-top: 10px; }
 #panel .queue .qadd input { flex: 1; min-width: 0; }
+#panel .queue .row button { padding: 2px 6px; font-size: 10px; }
+#panel .queue .sec-head { margin-top: 14px; }
+#panel .todo-err { margin: 6px 0 0; font: 12px var(--sans); color: var(--accent); }

@@ -8,6 +8,7 @@ import { adoptSession, createNode, endSession, moveNode, removeNode, updateNode 
 import { hooksInstalled, installHooks, installSkill, USER_SETTINGS, USER_SKILL } from "../core/install.ts";
 import { resolveInRoot, rootDir } from "../core/paths.ts";
 import { addToQueue, queueItems } from "../core/queue.ts";
+import { addTodo, allTodos, doneTodo, readTodos } from "../core/todo.ts";
 import { claim, claimedNodeDir, findClaudePid } from "../core/claims.ts";
 import { dropSession, liveTmuxSessions, readSessions, tmuxBase } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
@@ -29,6 +30,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   adopt,
   worker,
   queue,
+  todo,
   wait,
   send,
   ...daemon,
@@ -41,7 +43,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
 const HELP = `usage: orca <command>
 
 server:  up | down | status | restart | open | logs | uninstall
-nodes:   new | mv | rm | set | tree | check | init | queue
+nodes:   new | mv | rm | set | tree | check | init | queue | todo
 claude:  launch | dispatch | end | claim | adopt | worker | install-hooks
 child:   wait | send
 
@@ -76,6 +78,27 @@ function queue(argv: string[]) {
   if (task.length) return addToQueue(root, rel, task.join(" "));
   const file = path.join(resolveInRoot(root, rel), "CLAUDE.md");
   for (const i of queueItems(fs.readFileSync(file, "utf8"))) console.log(`[${i.mark}] ${i.text}${i.child ? ` → ${i.child}` : ""}`);
+}
+
+// Parked ideas in a node's TODO.md: adds one, checks one off, or lists the open ones. "." is the root.
+function todo(argv: string[]) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: { done: { type: "string" }, all: { type: "boolean" } },
+  });
+  requireRoot();
+  const print = (items: ReturnType<typeof readTodos>) => items.filter((t) => !t.done).forEach((t) => console.log(`${t.n}. ${t.text}`));
+  if (values.all) {
+    for (const g of allTodos(root).filter((g) => g.items.some((t) => !t.done))) console.log(g.path || "/"), print(g.items);
+    return;
+  }
+  if (!positionals.length) throw new Error('usage: orca todo <path> ["idea"] | orca todo <path> --done <n> | orca todo --all');
+  const [first, ...idea] = positionals;
+  const rel = first === "." ? "" : first.replace(/^\/+|\/+$/g, "");
+  if (values.done) return console.log(`done: ${doneTodo(root, rel, Number(values.done))}`);
+  if (idea.length) return addTodo(root, rel, idea.join(" "));
+  print(readTodos(root, rel));
 }
 
 function move(argv: string[]) {

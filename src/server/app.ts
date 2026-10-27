@@ -12,6 +12,7 @@ import { addToQueue, runQueues } from "../core/queue.ts";
 import { closeShell, launchShell, listShells, liveTmuxSessions } from "../core/sessions.ts";
 import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readTailnet } from "../core/tailscale.ts";
+import { addTodo, allTodos, doneTodo, nodeTodo, queueTodo, readTodos } from "../core/todo.ts";
 import { readUsage } from "../core/usage.ts";
 import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, SAFE, startSession, type WorkerState } from "../core/workers.ts";
@@ -59,6 +60,10 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   choose: (root, b) => chooseDispatch(root, String(b.id ?? ""), Number(b.index)),
   dismiss: (root, b) => (dismissDispatch(String(b.id ?? "")), {}),
   queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
+  todo: (root, b) => (addTodo(root, b.path, String(b.idea ?? "")), {}),
+  tododone: (root, b) => (doneTodo(root, b.path, Number(b.n)), {}),
+  todoqueue: (root, b) => (queueTodo(root, b.path, Number(b.n)), {}),
+  todonode: (root, b) => ({ path: nodeTodo(root, b.path, Number(b.n)) }),
   // Opens a document in the Mac's default app for its type.
   open: (root, b) => (execFileSync("open", [docPath(root, String(b.path ?? ""))]), {}),
   // Selects the document in a Finder window.
@@ -101,7 +106,12 @@ export function createServer(root: string) {
       if (url.pathname === "/api/tailnet") return json(res, 200, await readTailnet().catch(() => ({ state: "unavailable" })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
-      if (url.pathname === "/api/file") return json(res, 200, readDoc(root, url.searchParams.get("path") ?? "", url.searchParams.get("cwd") || undefined));
+      // One node's parked ideas, or with no path, every node's.
+      if (url.pathname === "/api/todos") {
+        const p = url.searchParams.get("path");
+        return json(res, 200, p === null ? allTodos(root) : [{ path: p, items: readTodos(root, p) }]);
+      }
+      if (url.pathname === "/api/file")return json(res, 200, readDoc(root, url.searchParams.get("path") ?? "", url.searchParams.get("cwd") || undefined));
       if (url.pathname === "/api/launch") {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
         const resume = url.searchParams.get("resume") === "1";

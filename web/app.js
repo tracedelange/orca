@@ -983,6 +983,7 @@ function renderPanel(n) {
       <button data-form="edit" type="button">Edit</button>
       <button data-form="child" type="button">Add child</button>
       <button class="finder" type="button">Docs folder</button>
+      <button class="todos" type="button">Todo</button>
       ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
       ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
     </div>
@@ -1059,6 +1060,66 @@ async function readInPanel(file) {
     <p class="kicker">${esc(d.path)}</p>
     <div class="md">${d.html}</div>`;
   panel.scrollTop = 0;
+}
+
+// ---- Todo: parked ideas in each node's TODO.md ----
+
+let todoScope = null; // a node path, or null for every node's list
+let todoDone = false; // show the checked-off items too
+
+// Shows the parked ideas of a node, or of every node, in place of the node's details until Back.
+async function openTodos(scope) {
+  if (term) closeTerminal(false);
+  if (scope !== null && selected !== scope) {
+    reveal(scope);
+    await select(scope);
+  } else if (selected === null) await select(graphRoot.data.path);
+  todoScope = scope;
+  renderTodos();
+}
+
+async function renderTodos() {
+  editing = true;
+  const groups = await (await fetch(`/api/todos${todoScope === null ? "" : `?path=${encodeURIComponent(todoScope)}`}`)).json();
+  const lists = groups.map((g) => {
+    const rows = g.items.filter((t) => todoDone || !t.done).map((t) => `
+      <li class="${t.done ? "j-done" : ""}">
+        <span class="mark">${t.done ? "✓" : "○"}</span>
+        <span class="text">${esc(t.text)}</span>
+        ${!t.done ? `<span class="row" data-path="${esc(g.path)}" data-n="${t.n}"><button type="button" data-todo="tododone">Done</button><button type="button" data-todo="todoqueue">Queue it</button><button type="button" data-todo="todonode">Make node</button></span>`
+          : t.to === "queued" ? `<span class="st">queued</span>`
+          : t.to ? `<button class="child" type="button" data-reveal="${esc(t.to)}" title="${esc(t.to)}">${esc(t.to.split("/").pop())}</button>` : ""}
+      </li>`);
+    if (!rows.length) return "";
+    const head = todoScope === null ? `<div class="sec-head"><button class="child" type="button" data-reveal="${esc(g.path)}">${esc(g.title)}</button></div>` : "";
+    return `${head}<ol>${rows.join("")}</ol>`;
+  }).join("");
+  panel.innerHTML = `
+    <div class="top"><button class="back" type="button">← ${esc(panelNode.title)}</button><span><label><input type="checkbox" class="tshowdone"${todoDone ? " checked" : ""}> Show done</label> <button class="close" type="button">Close</button></span></div>
+    <p class="kicker">${esc(todoScope === null ? "every node" : todoScope || "/")}</p>
+    <h1>Todo</h1>
+    <section class="queue">
+      ${lists || `<div class="none">No parked ideas</div>`}
+      <form class="qadd tadd"><input name="idea" placeholder="Park an idea${todoScope === null ? " at the root" : ""}." autocomplete="off" required><button type="submit">Add</button></form>
+      <p class="todo-err" hidden></p>
+    </section>`;
+}
+
+const todoError = (msg) => Object.assign(panel.querySelector(".todo-err"), { textContent: msg, hidden: false });
+
+async function todoAction(button) {
+  const { path, n } = button.parentElement.dataset;
+  try {
+    const out = await post(button.dataset.todo, { path, n: Number(n) });
+    if (out.path) {
+      if (path !== graphRoot.data.path) expanded.add(path); // unpack the parent so the new child shows
+      writeExpanded();
+      await load();
+    }
+  } catch (err) {
+    return todoError(err.message);
+  }
+  renderTodos();
 }
 
 function ago(iso) {
@@ -1326,7 +1387,10 @@ const paletteInput = palette.querySelector("input");
 const paletteList = palette.querySelector("ol");
 // The current node: the open terminal's, else the selected one, else the map's root.
 const hereNode = () => term?.path ?? selected ?? graphRoot.data.path;
-const COMMANDS = [{ name: "Open shell", run: () => openShell(hereNode()) }]; // { name, run }
+const COMMANDS = [ // { name, run }
+  { name: "Open shell", run: () => openShell(hereNode()) },
+  { name: "Open todo", run: () => openTodos(hereNode()) },
+];
 let paletteItems = [];
 let paletteAt = 0;
 
@@ -1523,6 +1587,14 @@ panel.addEventListener("keydown", (e) => {
 
 panel.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (e.target.matches(".tadd")) {
+    try {
+      await post("todo", { path: todoScope ?? "", idea: e.target.idea.value });
+    } catch (err) {
+      return todoError(err.message);
+    }
+    return renderTodos();
+  }
   if (!e.target.matches(".qadd")) return submitForm(e.target);
   const input = e.target.task;
   await post("queue", { path: selected, task: input.value }).catch((err) => alertInPanel(err.message));
@@ -1749,6 +1821,13 @@ panel.addEventListener("click", (e) => {
   if (open) openForm(open.dataset.form);
   const finder = e.target.closest(".finder");
   if (finder) popout(finder, selected, "finder");
+  if (e.target.closest(".todos")) openTodos(selected);
+  const todo = e.target.closest("[data-todo]");
+  if (todo) todoAction(todo);
+  if (e.target.matches(".tshowdone")) {
+    todoDone = e.target.checked;
+    renderTodos();
+  }
   if (e.target.closest(".launch")) launchSession(false);
   if (e.target.closest(".resume")) launchSession(true);
   if (e.target.closest(".shell")) openShell(selected);
@@ -1806,6 +1885,7 @@ addEventListener("hashchange", () => {
   applyRoot();
 });
 document.getElementById("mapbtn").addEventListener("click", () => term && closeTerminal());
+document.getElementById("todos").addEventListener("click", () => openTodos(null));
 addEventListener("resize", () => relayout(0));
 addEventListener("keydown", (e) => {
   if (e.key === "k" && e.metaKey) {

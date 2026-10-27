@@ -49,6 +49,7 @@ The vision for this project is a harness that's better at managing your most val
 | **Viewer** | A web page with the map, the session rail, node details, and a terminal for each session. |
 | **Workers** | Other machines that run sessions for this machine, over `ssh`. |
 | **Queues** | Task lists on a node. Background sessions do the tasks in git worktrees, and the server merges the results. |
+| **Todo** | Parked ideas in a `TODO.md` in each node folder. Nothing runs them. The viewer shows all of them in one list. |
 
 ## Requirements
 
@@ -143,6 +144,9 @@ orca launch work/vmt                        # start Claude in tmux
 orca launch work/vmt --resume               # reopen the last conversation of the node
 orca dispatch work "..."                    # let Haiku pick or make a node under work, then start Claude
 orca queue work/vmt "..."                   # add a task to the queue of the node
+orca todo work/vmt "..."                    # park an idea in the TODO.md of the node ("." is the root)
+orca todo work/vmt --done 2                 # check off idea 2
+orca todo --all                             # list the open ideas of every node
 orca wait work/vmt                          # wait until the child session stops or asks, then show its screen
 orca send work/vmt "..."                    # type a reply into the child session
 orca end orca-work-vmt                      # end a session (tmux name or session id)
@@ -211,6 +215,7 @@ orca dispatch work "..." --host my-worker
 - **New** opens a form to add a child to the root.
 - **Edit**, **Add child**, **Move**, and **Delete** in the panel do the same work as `orca set`, `new`, `mv`, and `rm`.
 - **Queue** in the panel adds tasks to the `## Queue` section of the node, one task on each line. The server starts a background session for each task, 2 at a time. Each background session is a child node. If the node has a repo, the session works in its own git worktree. When the session stops, the server merges its branch into your checkout and marks the task as done. Background sessions stay off the rail unless they need you. The queue moves only while the server runs.
+- **Todo** in the panel, or **Open todo** in the palette, shows the parked ideas of the node. Each idea has Done, Queue it, and Make node. Queue it moves the idea to the queue of the node. Make node creates a child node with the idea as its title and goal. Done ideas stay in `TODO.md`, and Show done shows them. **Todo** in the header shows the ideas of every node, and adds new ideas to the root.
 
 ## Development
 

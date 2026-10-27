@@ -190,6 +190,7 @@ A TypeScript CLI. `npm i -g @tdelange/orca` (or `npm link` in a checkout) puts i
 | `orca launch <path> [--resume] [--host]` | Starts Claude in tmux for a node. `--resume` opens the last conversation of the node. `--host` starts it on a worker. |
 | `orca dispatch <scope> "<prompt>" [--host]` | Places the prompt in the tree and starts Claude on it. If Haiku is not sure, it lists the choices and stops. |
 | `orca queue <path> ["<task>"]` | Adds a task to the queue of the node. Without a task, it prints the queue. |
+| `orca todo <path> ["<idea>"]`, `--done <n>`, `--all` | Adds an idea to the `TODO.md` of the node, or checks off idea `<n>`. Without an idea, it prints the open ideas with their numbers. `--all` prints the open ideas of every node. `.` is the root. |
 | `orca end <tmux-name or session-id>` | Ends a session on the hub or on a worker. |
 | `orca claim <path>` or `--auto "<text>" [--scope]` | Attaches the current Claude session to a node. The `/orca` skill runs it. |
 | `orca adopt <session-id>` | Moves a session that runs outside tmux into tmux. |
@@ -278,8 +279,9 @@ A result stays new until the person opens the terminal of that session. The brow
 - Launch and Resume start a session. A picker selects the hub or a worker.
 - Terminal, End, and Move into orca act on each session.
 - End needs a second click when the session is working or needs the person.
+- Todo shows the parked ideas of the node (see Parked ideas).
 
-**Header controls.** Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form. The `?` button at the right end lists every hotkey.
+**Header controls.** The header is its own bar across the top of the page. The rail, the panel, and the terminal start below it. Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form. Todo shows the parked ideas of every node. The `?` button at the right end lists every hotkey.
 
 **Terminal mode.** When a terminal opens, it fills the space to the right of the rail. The map, the legend, and the panel step aside. A click on another rail row changes the terminal.
 
@@ -359,6 +361,28 @@ If the merge conflicts, the manager aborts it and merges the main branch into th
 A failed task keeps its worktree and its session, so the person can examine them. A worker session that ends before it finishes also fails the task.
 
 The manager keeps the conflict retries in memory. A restart of the server sets a task that was mid-plan back to waiting.
+
+### 7. Parked ideas
+
+A node can keep ideas that are not ready for action in a `TODO.md` in its folder. The root `TODO.md` holds ideas that have no node yet. Nothing runs these ideas. Sessions do not load `TODO.md`, so the list costs no context. The root conventions file tells agents to read it only when the person asks.
+
+```markdown
+# TODO
+- [ ] open idea
+- [x] done idea
+- [x] idea that went to the queue → queued
+- [x] idea that became a node → work/orca/new-thing
+```
+
+Done ideas stay in the file. The number of an idea is its place among all ideas in the file, done ones included. New ideas go at the end, so the numbers do not change, and `orca todo <path> --done <n>` is safe for agents.
+
+The viewer shows a list in the panel, from the Todo button or the "Open todo" palette command. The header Todo button shows the lists of all nodes, grouped by node. Each open idea has three actions:
+
+- Done checks it off.
+- Queue it adds the text to the `## Queue` of the node and checks the idea off with `→ queued`.
+- Make node creates a child node with the text as its title and goal, and checks the idea off with the child path.
+
+The map does not show ideas or counts.
 
 ## Not built
 
