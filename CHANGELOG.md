@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/tracedelange/orca/compare/orca-v0.2.0...orca-v0.3.0) (2026-10-27)
+
+
+### Features
+
+* Done signal with End + archive, and uncommitted-files warning on End ([184dc81](https://github.com/tracedelange/orca/commit/184dc81a4d04e66fa10595e734dfb67be45e9506))
+* orca consolidate snapshots the node tree and starts a consolidation session ([089261c](https://github.com/tracedelange/orca/commit/089261c8ecc5b083542fff1bd987fd16387aff32))
+* parked ideas in a TODO.md per node ([03da10e](https://github.com/tracedelange/orca/commit/03da10eaca8418bd0035c1114004c0646effb381))
+* **viewer:** consolidate a node from its panel, with a subtree lock and accept/reject review ([c0e495e](https://github.com/tracedelange/orca/commit/c0e495e6c66accdf81c60320cf3070815d06d095))
+* **viewer:** End all button at the foot of the rail ([f6c2cae](https://github.com/tracedelange/orca/commit/f6c2cae37719c7bd6f27d75c49d3933927ed936d))
+* **viewer:** mark unread; clear new result on reply ([f1db5d1](https://github.com/tracedelange/orca/commit/f1db5d1d2ad7d928b7916bcbaceef0affd879b28))
+* **viewer:** palette opens the node panel; tabbed, keyboard-first panel ([2c42f78](https://github.com/tracedelange/orca/commit/2c42f78dbe3a897826812f066f13c37a467333fc))
+* **viewer:** plain tmux shells in node folders ([d32f6a6](https://github.com/tracedelange/orca/commit/d32f6a652f55dae9072a44a5323ef3eb802fab27))
+* **viewer:** quick todo capture, edit and undo; shared node field ([ed478ac](https://github.com/tracedelange/orca/commit/ed478aced939824c03ca5a9ae1531dd6c049d670))
+* **viewer:** rail toggle button and Docs folder button in the session view ([aaaba6a](https://github.com/tracedelange/orca/commit/aaaba6ad4445be49755e04e1f8dd6068af9a0c88))
+* **viewer:** switch Tailscale accounts from the palette ([32cce5d](https://github.com/tracedelange/orca/commit/32cce5d04e077a73e82902b3bdfb9c2f0679fc4a))
+* **web:** Restart orca command in the palette ([459f57d](https://github.com/tracedelange/orca/commit/459f57da5958276885ef540d8a30457f15d11196))
+
 ## [0.2.0](https://github.com/tracedelange/orca/compare/orca-v0.1.0...orca-v0.2.0) (2026-10-15)
 
 
