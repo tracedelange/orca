@@ -75,7 +75,7 @@
     </form>
   </dialog>
 
-  <!-- Palette: ⇧⌘P from anywhere. Finds a node by name and resumes it; ">" switches to commands. -->
+  <!-- Palette: ⇧⌘P from anywhere. Finds a node by name and opens its panel; ⌘Enter resumes it; ">" switches to commands. -->
   <dialog id="palette">
     <input type="text" spellcheck="false" autocomplete="off" placeholder="Find a node · > for commands">
     <ol></ol>
@@ -94,7 +94,7 @@
     <form class="form" method="dialog">
       <table>
         <tr><th>⌘K</th><td>Dispatch a task, from anywhere</td></tr>
-        <tr><th>⇧⌘P</th><td>Find and resume a node; type &gt; for commands</td></tr>
+        <tr><th>⇧⌘P</th><td>Find a node: ↵ opens its panel, ⌘↵ resumes it; type &gt; for commands</td></tr>
         <tr><th>/</th><td>Dispatch a task, on the map</td></tr>
         <tr><th>⌥T</th><td>Park an idea in a node's todo list, from anywhere</td></tr>
         <tr><th>f</th><td>Fit the map to the screen</td></tr>
@@ -104,6 +104,11 @@
         <tr><th>⌥Tab</th><td>Next session in the rail</td></tr>
         <tr><th>⌥⇧Tab</th><td>Previous session in the rail</td></tr>
         <tr><th>⌥Q</th><td>End the current session, after Enter</td></tr>
+        <tr><th>r l s</th><td>Panel: resume, launch, open a shell</td></tr>
+        <tr><th>n t e</th><td>Panel: add a child, add a todo, edit</td></tr>
+        <tr><th>1–5 [ ]</th><td>Panel: switch tabs</td></tr>
+        <tr><th>j k ↵</th><td>Panel: move through the tab's rows, open one</td></tr>
+        <tr><th>⌫</th><td>Panel: go to the parent node</td></tr>
       </table>
       <div class="row"><button type="submit" autofocus>Close</button></div>
     </form>

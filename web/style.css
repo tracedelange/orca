@@ -383,7 +383,7 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   right: 0;
   bottom: 0;
   z-index: 3;
-  width: 420px;
+  width: min(560px, 45vw);
   overflow-y: auto;
   padding: 22px 32px 40px;
   background: var(--paper-2);
@@ -410,6 +410,24 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .issues li::before { content: "! "; color: var(--accent); }
 
 #panel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+#panel kbd { margin-right: 6px; font: 10px var(--sans); color: var(--ink-3); }
+#panel button.on kbd { color: inherit; }
+#panel .more { margin: 0 0 16px; font: 12px var(--sans); }
+#panel .more summary { cursor: pointer; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; font-size: 10px; }
+#panel .more[open] summary { margin-bottom: 12px; }
+#panel .alert { margin: 0 0 16px; font: 12px var(--sans); color: var(--accent); }
+#panel .alert[hidden] { display: none; }
+#panel .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+#panel .tabbody li.on { background: var(--paper); }
+#panel .children { margin: 0 0 22px; }
+#panel .children ul { list-style: none; margin: 0; padding: 0; }
+#panel .children li { border-bottom: 1px solid var(--rule); }
+#panel .children .row-open { all: unset; box-sizing: border-box; width: 100%; display: flex; gap: 10px; align-items: baseline; padding: 8px 4px; cursor: pointer; font: 13px var(--sans); }
+#panel .children .row-open:hover .name { text-decoration: underline; }
+#panel .children .sub, #panel .children .st { color: var(--ink-3); font-size: 11px; }
+#panel .children .st { margin-left: auto; }
+#panel .children .none, #panel .docs .none { font: 12px var(--sans); color: var(--ink-3); }
+#panel .todo .sec-head label { letter-spacing: normal; text-transform: none; font: 11px var(--sans); }
 :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
 :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form[hidden] { display: none; }
 :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form label { display: grid; gap: 5px; }

@@ -918,9 +918,11 @@ function renderCrumbs() {
 
 // ---- Panel ----
 
-async function select(p) {
+async function select(p, tab = "node") {
   editing = false;
   selected = p;
+  panelTab = tab;
+  panelRow = -1;
   gNodes.selectAll("g.node").classed("selected", (n) => n.path === selected);
   panelText = "";
   await refreshPanel();
@@ -960,6 +962,11 @@ async function refreshPanel() {
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+// The panel shows one tab at a time. Its keys are in panelKey.
+const TABS = ["node", "docs", "todo", "notes", "queue"];
+let panelTab = "node";
+let panelRow = -1; // the row the keyboard is on, in the open tab
+
 function renderPanel(n) {
   // Polling redraws the panel as jobs move; keep a half-typed job.
   const draft = panel.querySelector(".qadd input");
@@ -971,38 +978,76 @@ function renderPanel(n) {
     ["branch", n.branch],
     ...Object.entries(n.extra).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]),
   ].filter(([, v]) => v != null);
+  const labels = { node: "Node", docs: `Docs${n.docs.length ? ` · ${n.docs.length}` : ""}`, todo: "Todo", notes: "Notes", queue: "Queue β" };
   panel.innerHTML = `
     <div class="top"><span class="kicker">${esc(n.path || "/")}</span><button class="close" type="button">Close</button></div>
     <h1>${esc(n.title)}</h1>
     ${n.goal ? `<p class="goal">${esc(n.goal)}</p>` : ""}
-    <dl>
-      ${rows.map(([k, v, cls]) => `<dt>${esc(k)}</dt><dd class="${cls ?? ""}">${esc(v)}</dd>`).join("")}
-      <dt>file</dt><dd class="file"><code>${esc(n.file)}</code><button class="copy" type="button">Copy</button></dd>
-    </dl>
     <div class="actions">
-      <button data-form="edit" type="button">Edit</button>
-      <button data-form="child" type="button">Add child</button>
-      <button class="finder" type="button">Docs folder</button>
-      <button class="todos" type="button">Todo</button>
-      ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
-      ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
+      <button class="resume" type="button"><kbd>r</kbd>Resume</button>
+      <button class="launch" type="button"><kbd>l</kbd>Launch</button>
+      <button class="shell" type="button" title="Open a terminal in this node's folder"><kbd>s</kbd>Shell</button>
+      <button data-form="child" type="button"><kbd>n</kbd>Add child</button>
+      <button class="newtodo" type="button"><kbd>t</kbd>Add todo</button>
+      <button data-form="edit" type="button"><kbd>e</kbd>Edit</button>
+      ${whereSelect()}
     </div>
+    <details class="more"><summary>More</summary>
+      <dl>
+        ${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}
+        <dt>file</dt><dd class="file"><code>${esc(n.file)}</code><button class="copy" type="button">Copy</button></dd>
+      </dl>
+      <div class="actions">
+        ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
+        ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
+      </div>
+    </details>
+    <p class="alert" hidden></p>
     <form class="form" hidden></form>
-    ${renderSessions(n.sessions)}
-    ${renderQueue(n.queue)}
-    ${renderDocs(n.docs)}
     ${n.issues.length ? `<ul class="issues">${n.issues.map((i) => `<li>${esc(i.level)}: ${esc(i.message)}</li>`).join("")}</ul>` : ""}
-    <div class="md">${n.html}</div>`;
-  // The goal shows under the title and the queue has its own section; drop their body sections.
+    <nav class="tabs">${TABS.map((t, i) => `<button type="button" data-tab="${t}"${t === panelTab ? ' class="on"' : ""}><kbd>${i + 1}</kbd>${labels[t]}</button>`).join("")}</nav>
+    <div class="tabbody">${renderTab(n)}</div>`;
+  // The goal shows under the title and the queue has its own tab; drop their body sections.
   for (const h of [...panel.querySelectorAll(".md h2")].filter((el) => ["goal", "queue"].includes(el.textContent.trim().toLowerCase()))) {
     while (h.nextElementSibling && !/^H[1-6]$/.test(h.nextElementSibling.tagName)) h.nextElementSibling.remove();
     h.remove();
   }
-  if (typed) {
+  if (typed && panel.querySelector(".qadd input")) {
     const input = panel.querySelector(".qadd input");
     input.value = typed.value;
     if (typed.focused) input.focus();
   }
+  markRow();
+  if (panelTab === "todo") {
+    todoScope = n.path;
+    renderTodos();
+  }
+}
+
+function renderTab(n) {
+  if (panelTab === "node") return renderChildren(byPath.get(n.path)?.children ?? []) + renderSessions(n.sessions);
+  if (panelTab === "docs") return renderDocs(n.docs);
+  if (panelTab === "notes") return `<div class="md">${n.html}</div>`;
+  if (panelTab === "queue") return renderQueue(n.queue);
+  return ""; // todo: renderTodos fills it
+}
+
+function setTab(t) {
+  editing = false;
+  panelTab = t;
+  panelRow = -1;
+  renderPanel(panelNode);
+}
+
+function renderChildren(kids) {
+  const items = kids.map((c) => {
+    const st = c.data.sessions.length ? mostUrgent(withNode(c)) : null;
+    return `<li><button class="row-open" type="button" data-reveal="${esc(c.data.path)}"><span class="name">${esc(c.data.title)}</span>${c.children ? `<span class="sub">${c.children.length} below</span>` : ""}${st ? `<span class="st">${STATE_MARK[st]} ${STATE_LABEL[st]}</span>` : ""}</button></li>`;
+  });
+  return `<section class="children">
+    <div class="sec-head"><span>Children</span></div>
+    ${items.length ? `<ul>${items.join("")}</ul>` : `<div class="none">No children</div>`}
+  </section>`;
 }
 
 // The node's ## Queue checklist as jobs: each line's mark is its state.
@@ -1040,15 +1085,17 @@ function renderSessions(sessions) {
       </span>
     </li>`);
   return `<section class="sessions">
-    <div class="sec-head"><span>Sessions</span><span class="row">${whereSelect()}<button class="shell" type="button" title="Open a terminal in this node's folder">Shell</button><button class="resume" type="button">Resume</button><button class="launch" type="button">Launch</button></span></div>
+    <div class="sec-head"><span>Sessions</span></div>
     ${items.length ? `<ul>${items.join("")}</ul>` : `<div class="none">No sessions</div>`}
   </section>`;
 }
 
 function renderDocs(docs) {
-  if (!docs.length) return "";
   const items = docs.map((d) => `<li><button class="doc" type="button" data-doc="${esc(d.file)}">${esc(d.name)}</button><time>${ago(d.modified)}</time></li>`);
-  return `<section class="docs"><div class="sec-head"><span>Docs</span></div><ul>${items.join("")}</ul></section>`;
+  return `<section class="docs">
+    <div class="sec-head"><span>Docs</span><button class="finder" type="button">Open folder</button></div>
+    ${items.length ? `<ul>${items.join("")}</ul>` : `<div class="none">No docs</div>`}
+  </section>`;
 }
 
 // Shows a document in place of the node's details, until Back.
@@ -1067,19 +1114,19 @@ async function readInPanel(file) {
 let todoScope = null; // a node path, or null for every node's list
 let todoDone = false; // show the checked-off items too
 
-// Shows the parked ideas of a node, or of every node, in place of the node's details until Back.
+// A node's parked ideas show in its Todo tab. Every node's ideas show in place of the node's details, until Back.
 async function openTodos(scope) {
   if (term) closeTerminal(false);
-  if (scope !== null && selected !== scope) {
-    reveal(scope);
-    await select(scope);
-  } else if (selected === null) await select(graphRoot.data.path);
   todoScope = scope;
+  if (scope !== null) {
+    reveal(scope);
+    return select(scope, "todo");
+  }
+  if (selected === null) await select(graphRoot.data.path);
   renderTodos();
 }
 
 async function renderTodos() {
-  editing = true;
   const groups = await (await fetch(`/api/todos${todoScope === null ? "" : `?path=${encodeURIComponent(todoScope)}`}`)).json();
   const lists = groups.map((g) => {
     const rows = g.items.filter((t) => todoDone || !t.done).map((t) => `
@@ -1095,14 +1142,26 @@ async function renderTodos() {
     const head = todoScope === null ? `<div class="sec-head"><button class="child" type="button" data-reveal="${esc(g.path)}">${esc(g.title)}</button></div>` : "";
     return `${head}<ol>${rows.join("")}</ol>`;
   }).join("");
+  if (todoScope !== null) {
+    const tab = panel.querySelector(".tabbody");
+    if (!tab || panelTab !== "todo") return;
+    tab.innerHTML = `
+      <section class="queue todo">
+        <div class="sec-head"><span>Todo</span><label><input type="checkbox" class="tshowdone"${todoDone ? " checked" : ""}> Show done</label></div>
+        ${lists || `<div class="none">No parked ideas</div>`}
+        <form class="qadd tadd"><input name="idea" placeholder="Park an idea." autocomplete="off" required><button type="submit">Add</button></form>
+        <p class="todo-err" hidden></p>
+      </section>`;
+    return markRow();
+  }
+  editing = true;
   panel.innerHTML = `
     <div class="top"><button class="back" type="button">← ${esc(panelNode.title)}</button><span><label><input type="checkbox" class="tshowdone"${todoDone ? " checked" : ""}> Show done</label> <button class="close" type="button">Close</button></span></div>
-    <p class="kicker">${esc(todoScope === null ? "every node" : todoScope || "/")}</p>
+    <p class="kicker">every node</p>
     <h1>Todo</h1>
     <section class="queue todo">
       ${lists || `<div class="none">No parked ideas</div>`}
-      ${todoScope === null ? `<button class="tnew" type="button">New idea</button>`
-        : `<form class="qadd tadd"><input name="idea" placeholder="Park an idea." autocomplete="off" required><button type="submit">Add</button></form>`}
+      <button class="tnew" type="button">New idea</button>
       <p class="todo-err" hidden></p>
     </section>`;
 }
@@ -1169,7 +1228,7 @@ async function adoptSession(button) {
 }
 
 async function launchSession(resume) {
-  const host = panel.querySelector(".sessions .where")?.value ?? "";
+  const host = panel.querySelector(".where")?.value ?? "";
   const q = `path=${encodeURIComponent(selected)}${resume ? "&resume=1" : ""}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
   const res = await fetch(`/api/launch?${q}`, { method: "POST" });
   const body = await res.json();
@@ -1217,7 +1276,7 @@ async function end(id) {
   if (selected !== null) refreshPanel();
 }
 
-const alertInPanel = (msg) => panel.querySelector(".sessions .sec-head span").replaceChildren(`Sessions · ${msg}`);
+const alertInPanel = (msg) => Object.assign(panel.querySelector(".alert"), { textContent: msg, hidden: false });
 
 // ---- Editing ----
 
@@ -1446,7 +1505,7 @@ ender.addEventListener("close", () => ender.returnValue === "end" && end(ender.d
 const keyhelp = document.getElementById("keyhelp");
 document.getElementById("keys").addEventListener("click", () => keyhelp.showModal());
 
-// ---- Palette: ⇧⌘P finds any node by name and resumes it. A ">" prefix lists commands instead. ----
+// ---- Palette: ⇧⌘P finds any node by name and opens its panel; ⌘Enter resumes it. A ">" prefix lists commands instead. ----
 
 const palette = document.getElementById("palette");
 const paletteInput = palette.querySelector("input");
@@ -1467,7 +1526,7 @@ let palettePick = null;
 function openPalette(pick = null) {
   if (palette.open || !tree) return;
   palettePick = pick;
-  paletteInput.placeholder = pick ? "Find a node" : "Find a node · > for commands";
+  paletteInput.placeholder = pick ? "Find a node" : "Find a node · ↵ open · ⌘↵ resume · > for commands";
   paletteInput.value = "";
   renderPalette();
   palette.showModal();
@@ -1501,7 +1560,8 @@ function renderPalette() {
         label: d.data.title,
         path: d.data.path || "/",
         state: d.data.sessions.length ? mostUrgent(withNode(d)) : null,
-        run: () => (palettePick ?? resumeNode)(d.data.path),
+        run: () => (palettePick ?? openNode)(d.data.path),
+        alt: palettePick ? null : () => resumeNode(d.data.path),
       }));
   }
   paletteAt = 0;
@@ -1519,11 +1579,18 @@ function movePalette(step) {
   rows[paletteAt].scrollIntoView({ block: "nearest" });
 }
 
-function pickPalette(i) {
+// `alt` is ⌘Enter: resume the node's session instead of opening its panel.
+function pickPalette(i, alt = false) {
   const item = paletteItems[i];
   if (!item) return;
   palette.close();
-  item.run();
+  (alt && item.alt ? item.alt : item.run)();
+}
+
+async function openNode(path) {
+  if (term) closeTerminal(false);
+  reveal(path);
+  await select(path);
 }
 
 // Opens the node's live terminal if it has one; otherwise resumes its last conversation, as the panel's Resume does.
@@ -1544,7 +1611,7 @@ paletteInput.addEventListener("keydown", (e) => {
   }
   if (e.key === "Enter") {
     e.preventDefault();
-    pickPalette(paletteAt);
+    pickPalette(paletteAt, e.metaKey);
   }
 });
 paletteList.addEventListener("click", (e) => {
@@ -1907,7 +1974,9 @@ panel.addEventListener("click", (e) => {
   if (open) openForm(open.dataset.form);
   const finder = e.target.closest(".finder");
   if (finder) popout(finder, selected, "finder");
-  if (e.target.closest(".todos")) openTodos(selected);
+  if (e.target.closest(".newtodo")) openTodoer();
+  const tab = e.target.closest("[data-tab]");
+  if (tab) setTab(tab.dataset.tab);
   if (e.target.closest(".tedit-open")) editIdea(e.target.closest("li"));
   if (e.target.closest(".tnew")) openTodoer();
   const todo = e.target.closest("[data-todo]");
@@ -1937,6 +2006,53 @@ panel.addEventListener("click", (e) => {
   const copy = e.target.closest(".copy");
   if (copy) navigator.clipboard.writeText(panelFile).then(() => (copy.textContent = "Copied"));
 });
+
+// Keys for the open panel, while nothing takes typing. Returns whether it used the key.
+const PANEL_KEYS = { r: ".resume", l: ".launch", s: ".shell", n: '[data-form="child"]', t: ".newtodo", e: '[data-form="edit"]' };
+// What Enter opens in a row: a child's panel, a doc, a session's terminal, a todo's node.
+const ROW_OPEN = "[data-reveal], [data-doc], .attach";
+
+function panelKey(k) {
+  if (PANEL_KEYS[k]) {
+    panel.querySelector(PANEL_KEYS[k])?.click();
+    return true;
+  }
+  if (k >= "1" && k <= String(TABS.length)) {
+    setTab(TABS[k - 1]);
+    return true;
+  }
+  if (k === "[" || k === "]") {
+    setTab(TABS[(TABS.indexOf(panelTab) + (k === "]" ? 1 : TABS.length - 1)) % TABS.length]);
+    return true;
+  }
+  if (["j", "k", "ArrowDown", "ArrowUp"].includes(k)) {
+    const rows = panelRows();
+    if (rows.length) panelRow = (panelRow + (k === "j" || k === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+    markRow();
+    return true;
+  }
+  if (k === "Enter") {
+    const open = panelRows()[panelRow]?.querySelector(ROW_OPEN);
+    open?.click();
+    return !!open;
+  }
+  if (k === "Backspace") {
+    const up = byPath.get(selected)?.parent?.data.path;
+    if (up !== undefined) {
+      reveal(up);
+      select(up);
+    }
+    return true;
+  }
+  return false;
+}
+
+const panelRows = () => [...panel.querySelectorAll(".tabbody li")];
+
+function markRow() {
+  panelRows().forEach((li, i) => li.classList.toggle("on", i === panelRow));
+  panelRows()[panelRow]?.scrollIntoView({ block: "nearest" });
+}
 
 // ---- Wiring ----
 
@@ -2010,6 +2126,7 @@ addEventListener("keydown", (e) => {
     e.preventDefault();
     return openDispatch();
   }
+  if (selected !== null && !term && !typing && !editing && !e.metaKey && !e.ctrlKey && !e.altKey && panelKey(e.key)) return e.preventDefault();
   if (e.key !== "Escape" || term) return;
   if (editing) return closeForm();
   if (selected !== null) closePanel();
