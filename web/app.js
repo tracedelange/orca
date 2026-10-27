@@ -292,37 +292,50 @@ svg.call(zoom);
 
 // ---- Starfield ----
 
-// Two layers of stars behind the map. Each repeats every TILE px and pans at a fraction of the map's speed, for depth.
+// Two layers of stars behind the map. Each pans at a fraction of the map's speed, for depth.
+// Stars come in TILE px tiles, seeded by the tile's position: neighbours differ, and a tile looks the same when you pan back.
 const TILE = 512;
 const gStars = svg.insert("g", ":first-child").attr("class", "stars");
 const starLayers = [
-  { name: "far", speed: 0.08, count: 40, size: [0.5, 1] },
-  { name: "near", speed: 0.2, count: 12, size: [0.9, 1.6] },
-].map((l) => ({
-  ...l,
-  g: gStars.append("g").attr("class", l.name),
-  tile: d3.range(l.count * 3).map(() => ({ x: Math.random() * TILE, y: Math.random() * TILE, r: l.size[0] + Math.random() * (l.size[1] - l.size[0]) })),
-}));
+  { name: "far", seed: 1, speed: 0.08, count: 40, size: [0.5, 1] },
+  { name: "near", seed: 2, speed: 0.2, count: 12, size: [0.9, 1.6] },
+].map((l) => ({ ...l, g: gStars.append("g").attr("class", l.name), shown: "" }));
+
+function tileStars(l, i, j) {
+  const rnd = d3.randomLcg(Math.abs((i * 73856093) ^ (j * 19349663) ^ (l.seed * 83492791)));
+  return d3.range(Math.round(l.count * knobs.density)).map(() => ({
+    x: (i + rnd()) * TILE,
+    y: (j + rnd()) * TILE,
+    r: l.size[0] + rnd() * (l.size[1] - l.size[0]),
+    // About a third twinkle, each on its own clock.
+    tw: rnd() < 0.3,
+    dur: 3 + rnd() * 5,
+    delay: -rnd() * 8,
+  }));
+}
 
 function drawStars() {
-  const tiles = d3.cross(d3.range(Math.ceil(innerWidth / TILE) + 1), d3.range(Math.ceil(innerHeight / TILE) + 1));
-  for (const l of starLayers) {
-    l.g.selectAll("circle")
-      .data(tiles.flatMap(([i, j]) => l.tile.slice(0, Math.round(l.count * knobs.density)).map((s) => ({ ...s, x: s.x + i * TILE, y: s.y + j * TILE }))))
-      .join("circle")
-      .attr("cx", (s) => s.x).attr("cy", (s) => s.y).attr("r", (s) => s.r)
-      // About a third twinkle, each on its own clock.
-      .classed("tw", () => Math.random() < 0.3)
-      .style("animation-duration", () => `${3 + Math.random() * 5}s`)
-      .style("animation-delay", () => `${-Math.random() * 8}s`);
-  }
+  for (const l of starLayers) l.shown = "";
   panStars(d3.zoomTransform(svg.node()));
 }
 
 function panStars(t) {
   for (const l of starLayers) {
-    const off = (v) => ((((v * l.speed * knobs.parallax) % TILE) + TILE) % TILE) - TILE;
-    l.g.attr("transform", `translate(${off(t.x)},${off(t.y)})`);
+    const dx = t.x * l.speed * knobs.parallax, dy = t.y * l.speed * knobs.parallax;
+    l.g.attr("transform", `translate(${dx},${dy})`);
+    // Redraw only when the set of tiles on screen changes.
+    const is = d3.range(Math.floor(-dx / TILE), Math.floor((innerWidth - dx) / TILE) + 1);
+    const js = d3.range(Math.floor(-dy / TILE), Math.floor((innerHeight - dy) / TILE) + 1);
+    const key = `${is[0]},${js[0]},${is.length},${js.length}`;
+    if (key === l.shown) continue;
+    l.shown = key;
+    l.g.selectAll("circle")
+      .data(d3.cross(is, js).flatMap(([i, j]) => tileStars(l, i, j)))
+      .join("circle")
+      .attr("cx", (s) => s.x).attr("cy", (s) => s.y).attr("r", (s) => s.r)
+      .classed("tw", (s) => s.tw)
+      .style("animation-duration", (s) => `${s.dur}s`)
+      .style("animation-delay", (s) => `${s.delay}s`);
   }
 }
 drawStars();
