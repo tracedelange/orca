@@ -96,7 +96,6 @@ async function load() {
   }
   // Nodes go idle without any change to the data, so check whether the grouping moved.
   else if (graphRoot && visibleNodes().map((d) => d.data.path).join("|") !== shownKey) render();
-  if (term) markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   revealActive();
   renderRail();
   if (selected !== null) refreshPanel();
@@ -128,7 +127,13 @@ async function setArchived(path, archived) {
 function markSeen(sessions) {
   const fresh = sessions.filter(isNew);
   if (!fresh.length) return;
-  const marks = Object.fromEntries(fresh.map((s) => [s.sessionId, s.finishedAt]));
+  saveSeen(Object.fromEntries(fresh.map((s) => [s.sessionId, s.finishedAt])));
+}
+
+// An empty mark is older than any finishedAt, so the result reads as new again.
+const markUnread = (id) => saveSeen({ [id]: "" });
+
+function saveSeen(marks) {
   Object.assign(seen, marks);
   post("seen", { seen: marks }).catch(() => {});
   renderRail();
@@ -751,7 +756,8 @@ function railRow(s) {
   const park = isParked(s)
     ? `<button type="button" class="end park" data-park="${esc(s.sessionId)}" title="Back to the rail">Unpark</button>`
     : `<button type="button" class="end park" data-park="${esc(s.sessionId)}" data-on="1" title="Move to Parked until it acts again">Park</button>`;
-  return `<li>${park}${endButton(s, st)}<button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
+  const unread = st === "ready" && s.finishedAt ? `<button type="button" class="end unread" data-unread="${esc(s.sessionId)}" title="Show as new result until you type a reply">Unread</button>` : "";
+  return `<li>${unread}${park}${endButton(s, st)}<button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
     <span class="line"><span class="mark">${done ? "✓" : STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${label}</span></span>
     ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
@@ -832,6 +838,8 @@ rail.addEventListener("click", async (e) => {
     if (c?.tmux) openTerminal(c.tmux, c.path, c.host, true);
     return;
   }
+  const unread = e.target.closest("[data-unread]");
+  if (unread) return markUnread(unread.dataset.unread);
   const park = e.target.closest("[data-park]");
   if (park) {
     await post("park", { session: park.dataset.park, park: !!park.dataset.on }).catch(() => {});
@@ -1874,12 +1882,15 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   ws.onmessage = (e) => xterm.write(e.data);
   ws.onclose = () => xterm.write("\r\n[disconnected]\r\n");
   const send = (d) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ i: d }));
-  if (!watch) xterm.onData(send);
+  if (!watch) xterm.onData((d) => {
+    // A result counts as read once you type a reply. Escape sequences (focus reports, arrow keys) do not count.
+    if (!d.startsWith("\x1b")) markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
+    send(d);
+  });
   const ro = new ResizeObserver(resize);
   ro.observe(el);
   term = { xterm, ws, ro, name, path, host, watch };
   lastTerm = { name, path, host };
-  markSeen(sessionsIn(tree).filter((s) => isOpen(s)));
   renderRail();
   xterm.focus();
 }

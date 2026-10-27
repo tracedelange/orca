@@ -313,6 +313,7 @@ body:not(.mode-term) #rail { bottom: 200px; background: var(--paper-2); border: 
 #rail li:hover button.end, #rail li button.end:focus-visible, #rail li button.end.armed { opacity: 1; }
 button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail li button.park { right: 44px; }
+#rail li button.unread { right: 92px; }
 #rail .rail-head.fold { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--ink-3); cursor: pointer; }
 #rail .rail-head.fold::before { content: "▾ "; }
 #rail .folded .rail-head.fold::before { content: "▸ "; }
