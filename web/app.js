@@ -1541,6 +1541,7 @@ const COMMANDS = [ // { name, run }
   { name: "New todo", run: () => openTodoer() },
   { name: "Open todo", run: () => openTodos(hereNode()) },
   { name: "All todos", run: () => openTodos(null) },
+  { name: "Restart orca", run: () => restartOrca() },
 ];
 let paletteItems = [];
 let paletteAt = 0;
@@ -2170,6 +2171,19 @@ async function switchTailnet(id) {
   net.innerHTML = "<b>tailnet</b>switching…";
   await fetch(`/api/tailnet/switch?id=${encodeURIComponent(id)}`, { method: "POST" }).catch(() => {});
   loadTailnet().then(loadUsage);
+}
+
+// The usage card shows the progress until the new server answers, then goes back to usage.
+async function restartOrca() {
+  const el = document.getElementById("usage");
+  el.textContent = "restarting orca…";
+  const ok = await fetch("/api/restart", { method: "POST" }).then((r) => r.ok, () => false);
+  if (!ok) return (el.textContent = "restart failed");
+  // Give the old server time to exit, so the poll does not reach it.
+  await new Promise((r) => setTimeout(r, 1000));
+  while (!(await fetch("/api/usage").then((r) => r.ok, () => false))) await new Promise((r) => setTimeout(r, 500));
+  el.textContent = "orca restarted";
+  setTimeout(loadUsage, 3000);
 }
 
 // The tailnet leads the usage card. "Running" shows its name; anything else shows the state, in the accent.

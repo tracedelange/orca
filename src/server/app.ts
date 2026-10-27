@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
@@ -19,6 +19,7 @@ import { attachArgs, findWorker, pollWorkers, remoteEnd, SAFE, startSession, typ
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const JS = "text/javascript; charset=utf-8";
+const CLI = file("../../bin/orca.js");
 // Resolve through node, so the files are found whether npm nests or hoists the dependencies.
 const dep = (pkg: string, p: string) => fileURLToPath(new URL(p, import.meta.resolve(pkg)));
 
@@ -108,6 +109,12 @@ export function createServer(root: string) {
       if (url.pathname === "/api/tailnet/switch") {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
         await switchTailnet(url.searchParams.get("id") ?? "");
+        return json(res, 200, { ok: true });
+      }
+      // `orca restart` kills this process, so it runs detached, after the reply goes out.
+      if (url.pathname === "/api/restart") {
+        if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
+        res.on("finish", () => spawn(process.execPath, [CLI, "restart"], { detached: true, stdio: "ignore" }).unref());
         return json(res, 200, { ok: true });
       }
       if (url.pathname === "/api/tailnet") return json(res, 200, await readTailnet().catch(() => ({ state: "unavailable" })));
