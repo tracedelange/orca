@@ -22,6 +22,7 @@ let center = { cx: 0, cy: 0 };
 let selected = null;  // path shown in the panel
 let treeText = "";
 let panelText = "";
+let panelLock = ""; // the selected node's consolidation state, which /api/node does not carry
 let panelFile = "";
 let term = null;      // open terminal: { xterm, ws, ro, name, path, host }
 let lastTerm = null;  // { name, path, host } of the last terminal, for ⌘.
@@ -98,6 +99,8 @@ async function load() {
   else if (graphRoot && visibleNodes().map((d) => d.data.path).join("|") !== shownKey) render();
   revealActive();
   renderRail();
+  const key = lockKey(selected);
+  if (key !== panelLock) (panelLock = key), (panelText = "");
   if (selected !== null) refreshPanel();
 }
 
@@ -613,7 +616,7 @@ const kindOf = (d) => (d === graphRoot ? "is-root" : !d.children ? "leaf" : isUn
 
 // Sizes animate, so a node grows or shrinks smoothly when it is packed or unpacked.
 function fill(sel, t = d3.transition().duration(0)) {
-  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.d.data.archived ? " archived" : ""}${n.d.others ? " others" : ""}${n.path === selected ? " selected" : ""}`);
+  sel.attr("class", (n) => `node ${kindOf(n.d)} a-${mostUrgent(nodeSessions(n.d))}${n.d.data.archived ? " archived" : ""}${n.d.data.lock !== undefined ? " locked" : ""}${n.d.others ? " others" : ""}${n.path === selected ? " selected" : ""}`);
   sel.select(".halo").transition(t).attr("r", (n) => (n.d === graphRoot ? n.r + 6 : 0));
   sel.select(".rim").transition(t).attr("r", (n) => n.r);
   sel.select(".pulse").transition(t).attr("r", (n) => n.r);
@@ -997,6 +1000,7 @@ function renderPanel(n) {
     <div class="top"><span class="kicker">${esc(n.path || "/")}</span><button class="close" type="button">Close</button></div>
     <h1>${esc(n.title)}</h1>
     ${n.goal ? `<p class="goal">${esc(n.goal)}</p>` : ""}
+    ${roundBanner(n.path)}
     <div class="actions">
       <button class="resume" type="button"><kbd>r</kbd>Resume</button>
       <button class="launch" type="button"><kbd>l</kbd>Launch</button>
@@ -1013,6 +1017,7 @@ function renderPanel(n) {
       </dl>
       <div class="actions">
         ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
+        ${byPath.get(n.path)?.children ? `<button class="consolidate" type="button" title="Propose a cleaner structure for this subtree">Consolidate…</button>` : ""}
         ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
       </div>
     </details>
@@ -1021,6 +1026,9 @@ function renderPanel(n) {
     ${n.issues.length ? `<ul class="issues">${n.issues.map((i) => `<li>${esc(i.level)}: ${esc(i.message)}</li>`).join("")}</ul>` : ""}
     <nav class="tabs">${TABS.map((t, i) => `<button type="button" data-tab="${t}"${t === panelTab ? ' class="on"' : ""}><kbd>${i + 1}</kbd>${labels[t]}</button>`).join("")}</nav>
     <div class="tabbody">${renderTab(n)}</div>`;
+  if (byPath.get(n.path)?.data.lock !== undefined) {
+    for (const b of panel.querySelectorAll(".resume, .launch, [data-form], [data-archive], .consolidate")) b.disabled = true;
+  }
   // The goal shows under the title and the queue has its own tab; drop their body sections.
   for (const h of [...panel.querySelectorAll(".md h2")].filter((el) => ["goal", "queue"].includes(el.textContent.trim().toLowerCase()))) {
     while (h.nextElementSibling && !/^H[1-6]$/.test(h.nextElementSibling.tagName)) h.nextElementSibling.remove();
@@ -1250,6 +1258,72 @@ async function launchSession(resume) {
   await load();
   openTerminal(body.tmux, selected, body.host);
 }
+
+const lockKey = (path) => {
+  const d = byPath.get(path)?.data;
+  return d?.lock === undefined ? "" : JSON.stringify([d.lock, d.round, d.sessions.map((s) => [s.tmux, s.state, s.done])]);
+};
+
+// A node in a consolidation round is locked. The round's own node says how the round is going
+// and offers Accept (commit the subtree) and Reject (put it back as it was).
+function roundBanner(path) {
+  const d = byPath.get(path)?.data;
+  if (d?.lock === undefined) return "";
+  if (!d.round) return `<div class="round"><p>Locked while ${esc(d.lock || "/")} consolidates.</p></div>`;
+  const s = d.sessions.find((x) => x.tmux === d.round.tmux);
+  const state = !s ? "Session ended" : s.done ? "Ready to review" : s.state === "working" ? "Consolidating…" : "Waiting on you";
+  return `<div class="round">
+    <p><strong>${state}</strong> · ${d.round.changed} file${d.round.changed === 1 ? "" : "s"} changed</p>
+    <div class="row">
+      ${s ? `<button type="button" data-watch="${esc(s.tmux)}">Open session</button>` : ""}
+      <button type="button" data-finish="accept">Accept</button>
+      <button type="button" data-finish="reject">Reject</button>
+    </div>
+  </div>`;
+}
+
+// Reject throws away the round's changes, so it needs a second click.
+async function finishRound(button) {
+  const accept = button.dataset.finish === "accept";
+  if (!accept && !button.classList.contains("armed")) {
+    button.classList.add("armed");
+    button.textContent = "Sure? Reverts all changes";
+    setTimeout(() => {
+      button.classList.remove("armed");
+      button.textContent = "Reject";
+    }, 3000);
+    return;
+  }
+  const d = byPath.get(selected)?.data;
+  const s = d?.sessions.find((x) => x.tmux === d.round?.tmux);
+  if (s && isOpen(s)) closeTerminal();
+  try {
+    await post("finish", { path: selected, accept });
+  } catch (err) {
+    return alertInPanel(err.message);
+  }
+  await load();
+}
+
+// Consolidation commits ~/nodes and starts a session that rewrites the subtree, so it asks first.
+const consolidator = document.getElementById("consolidator");
+function confirmConsolidate(path) {
+  consolidator.dataset.path = path;
+  consolidator.querySelector(".what").textContent = `Consolidate ${path || "/"}? Orca commits the node tree first, then starts a session that proposes archives and moves under this node. Nothing changes until you approve its proposal.`;
+  consolidator.returnValue = "";
+  consolidator.showModal();
+}
+consolidator.addEventListener("close", async () => {
+  if (consolidator.returnValue !== "go") return;
+  const path = consolidator.dataset.path;
+  try {
+    const { tmux } = await post("consolidate", { path });
+    await load();
+    openTerminal(tmux, path);
+  } catch (err) {
+    alertInPanel(err.message);
+  }
+});
 
 async function openShell(path) {
   try {
@@ -2037,6 +2111,11 @@ panel.addEventListener("click", (e) => {
   if (e.target.closest(".launch")) launchSession(false);
   if (e.target.closest(".resume")) launchSession(true);
   if (e.target.closest(".shell")) openShell(selected);
+  if (e.target.closest(".consolidate")) confirmConsolidate(selected);
+  const finish = e.target.closest("[data-finish]");
+  if (finish) finishRound(finish);
+  const watch = e.target.closest("[data-watch]");
+  if (watch) openTerminal(watch.dataset.watch, selected);
   const endButton = e.target.closest("[data-end]");
   if (endButton) endSession(endButton);
   const adopt = e.target.closest("[data-adopt]");

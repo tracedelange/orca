@@ -167,7 +167,7 @@ async function dispatchPrompt(argv: string[]) {
 function consolidateNode(argv: string[]) {
   if (argv.length !== 1) throw new Error("usage: orca consolidate <path>");
   requireRoot();
-  const c = consolidate(root, argv[0], path.join(TEMPLATES, "consolidate.md"));
+  const c = consolidate(root, argv[0]);
   console.log(`snapshot ${c.commit}; skipping live nodes: ${c.live.join(", ") || "none"}`);
   console.log(`started ${c.tmux}; attach with: ${attachCommand(c)}`);
 }

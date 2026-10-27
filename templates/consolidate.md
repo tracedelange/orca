@@ -12,6 +12,8 @@ Rules:
 - Never delete a node. To archive one, run `orca set <path> --archived`. Archiving a node archives its subtree.
 - Leave these nodes alone, because a session is live on them: {{live}}
 - To move a node, use `orca mv <from> <to>`. To create a group node, use `orca new`.
+- Change only files inside this node's folder. The user accepts or rejects everything under it as one change.
+- Do not commit.
 - A parent CLAUDE.md with children must stay at 40 lines or fewer.
 
 Steps:
@@ -19,4 +21,4 @@ Steps:
 2. Write your proposal to docs/consolidation-{{date}}.md in this node. Give one row per node with its path, class, action and reason. List each move on its own line.
 3. Stop and ask the user to review the proposal. Change nothing else until they approve it.
 4. Apply the approved proposal. Add a dated Log line to every node you change.
-5. Tell the user to review the changes with `git -C {{root}} diff`, then commit them or discard them with `git -C {{root}} checkout . && git -C {{root}} clean -fd`. Do not commit them yourself.
+5. End your reply with a `Done:` line. The user then reviews the changes and accepts or rejects them in the viewer.

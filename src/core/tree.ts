@@ -5,6 +5,7 @@ import { parseNode, type NodeFields } from "./node.ts";
 import { expandHome, isInside, PathError, resolveInRoot } from "./paths.ts";
 import { queueItems } from "./queue.ts";
 import { lastSessionFile, readSessions, splitRepo, type Session } from "./sessions.ts";
+import type { Round } from "./consolidate.ts";
 import type { WorkerState } from "./workers.ts";
 
 export type TreeNode = NodeFields & {
@@ -13,6 +14,8 @@ export type TreeNode = NodeFields & {
   descendantCount: number;
   sessions: Session[];
   lastActive?: string; // the last hook event in this node, live session or not
+  lock?: string; // the path of the consolidation round this node is in
+  round?: Round & { changed: number }; // on the round's own node: files changed so far
   children: TreeNode[];
 };
 

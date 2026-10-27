@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -124,6 +125,27 @@ test("edit endpoints refuse other origins and GET, and report conflicts", async 
   assert.equal((await post("create", { path: "../../x" }, base)).status, 400);
   assert.equal((await post("create", { path: "work" }, base)).status, 409);
   assert.equal((await post("update", { path: "work", title: "Work!" }, base)).status, 200);
+  assert.equal((await post("consolidate", { path: "work" }, base)).status, 409); // the seeded root is not a git repo
+});
+
+test("a consolidating subtree refuses viewer edits and launches, and shows its round in the tree", async () => {
+  const file = path.join(root, ".orca", "consolidations.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ home: { tmux: "orca-home", commit: "abc", startedAt: "" } }));
+  execFileSync("git", ["-C", root, "init", "-q"]); // a round only exists in a git tree
+  try {
+    const post = (op: string, body: unknown) =>
+      fetch(`${base}/api/nodes/${op}`, { method: "POST", body: JSON.stringify(body), headers: { origin: base } });
+    assert.equal((await post("update", { path: "home", title: "x" })).status, 409);
+    assert.equal((await post("create", { path: "home/new" })).status, 409);
+    assert.equal((await post("move", { from: "work", to: "home/work" })).status, 409);
+    assert.equal((await fetch(`${base}/api/launch?path=home`, { method: "POST", headers: { origin: base } })).status, 409);
+    const tree = await (await fetch(`${base}/api/tree`)).json();
+    assert.equal(tree.children.find((c: { path: string }) => c.path === "home").lock, "home");
+  } finally {
+    fs.rmSync(file);
+    fs.rmSync(path.join(root, ".git"), { recursive: true });
+  }
 });
 
 test("dispatch returns at once and keeps a failed job for retry until dismissed", async () => {

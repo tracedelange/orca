@@ -24,7 +24,7 @@ fs.mkdirSync(process.env.TMUX_TMPDIR!);
 
 const { installHooks, USER_SETTINGS } = await import("../src/core/install.ts");
 const { askHaiku, chooseDispatch, dismissDispatch, dispatch, listJobs, queueDispatch, retryDispatch } = await import("../src/core/dispatch.ts");
-const { consolidate } = await import("../src/core/consolidate.ts");
+const { assertUnlocked, attachRounds, consolidate, finishRound } = await import("../src/core/consolidate.ts");
 const { closeShell, launch, launchShell, listShells } = await import("../src/core/sessions.ts");
 const { queueItems, runQueues } = await import("../src/core/queue.ts");
 const { flatten, readTree } = await import("../src/core/tree.ts");
@@ -192,18 +192,43 @@ test("the CLI launches and dispatches, and says how to attach", async () => {
   assert.equal(orca("dispatch", "home", "Do the chores"), "created home/chores\ndispatched to home/chores; attach with: tmux attach -t orca-home-chores\n");
 });
 
-test("consolidate needs a git repo, commits a snapshot, and starts a session with the prompt", async () => {
+test("consolidate snapshots the tree, locks the subtree, and accept or reject ends the round", async () => {
   const root = seededRoot();
-  const template = path.resolve(import.meta.dirname, "../templates/consolidate.md");
-  assert.throws(() => consolidate(root, "work", template), /is not a git repo/);
-  execFileSync("git", ["-C", root, "init", "-q"]);
-  const c = consolidate(root, "work", template);
-  assert.equal(execFileSync("git", ["-C", root, "log", "--format=%s"], { encoding: "utf8" }), "snapshot: before consolidating work\n");
-  assert.equal(execFileSync("git", ["-C", root, "status", "--porcelain"], { encoding: "utf8" }), "");
+  const git = (...args: string[]) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" });
+  assert.throws(() => consolidate(root, "work"), /is not a git repo/);
+  fs.writeFileSync(path.join(root, ".gitignore"), ".orca/\n.node/\n");
+  git("init", "-q");
+  const c = consolidate(root, "work");
+  assert.equal(git("log", "--format=%s"), "snapshot: before consolidating work\n");
   assert.equal(c.tmux, "orca-work");
   const prompt = (await session()).at(-1)!;
   assert.match(prompt, /Consolidate the subtree under this node \(work\)/);
   assert.doesNotMatch(prompt, /\{\{/);
-  // A clean tree is not committed again.
-  assert.equal(consolidate(root, "work", template).commit, c.commit);
+
+  // The subtree, its ancestors and its descendants cannot start another round; the viewer cannot edit inside it.
+  assert.throws(() => consolidate(root, ""), /work is already consolidating/);
+  assert.throws(() => assertUnlocked(root, "home", "work/new"), /work\/new is locked/);
+  assertUnlocked(root, "home");
+  const tree = flatten(attachRounds(root, readTree(root)));
+  assert.equal(tree.find((n) => n.path === "work")!.round!.tmux, "orca-work");
+  assert.equal(tree.find((n) => n.path === "home")!.lock, undefined);
+
+  // Reject puts the subtree back, and leaves changes outside it alone.
+  fs.writeFileSync(path.join(root, "work/CLAUDE.md"), "changed");
+  fs.writeFileSync(path.join(root, "work/new.md"), "new");
+  fs.writeFileSync(path.join(root, "home/CLAUDE.md"), "elsewhere");
+  finishRound(root, "work", false);
+  assert.notEqual(fs.readFileSync(path.join(root, "work/CLAUDE.md"), "utf8"), "changed");
+  assert.ok(!fs.existsSync(path.join(root, "work/new.md")));
+  assert.equal(git("status", "--porcelain"), " M home/CLAUDE.md\n");
+  assert.throws(() => finishRound(root, "work", false), /work is not consolidating/);
+
+  // Accept commits only the subtree.
+  consolidate(root, "work");
+  fs.writeFileSync(path.join(root, "work/new.md"), "new");
+  fs.writeFileSync(path.join(root, "home/CLAUDE.md"), "elsewhere again");
+  finishRound(root, "work", true);
+  assert.equal(git("log", "-1", "--format=%s"), "consolidate: work\n");
+  assert.equal(git("status", "--porcelain"), " M home/CLAUDE.md\n");
+  assertUnlocked(root, "work");
 });

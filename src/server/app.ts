@@ -4,6 +4,7 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import pty from "node-pty";
 import { WebSocketServer } from "ws";
+import { assertUnlocked, attachRounds, consolidate, finishRound } from "../core/consolidate.ts";
 import { chooseDispatch, dismissDispatch, listJobs, queueDispatch, retryDispatch } from "../core/dispatch.ts";
 import { adoptSession, createNode, docsDir, EditError, endSession, moveNode, removeNode, uncommitted, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
@@ -44,10 +45,10 @@ const workerSession = (id: string) => {
 
 // Write endpoints. Each takes a JSON body and returns JSON.
 const EDITS: Record<string, (root: string, b: any) => unknown> = {
-  create: (root, b) => ({ created: createNode(root, b.path, b) }),
-  move: (root, b) => ({ path: moveNode(root, b.from, b.to) }),
-  remove: (root, b) => ({ trashed: removeNode(root, b.path) }),
-  update: (root, b) => (updateNode(root, b.path, b), {}),
+  create: (root, b) => (assertUnlocked(root, b.path), { created: createNode(root, b.path, b) }),
+  move: (root, b) => (assertUnlocked(root, b.from, b.to), { path: moveNode(root, b.from, b.to) }),
+  remove: (root, b) => (assertUnlocked(root, b.path), { trashed: removeNode(root, b.path) }),
+  update: (root, b) => (assertUnlocked(root, b.path), updateNode(root, b.path, b), {}),
   // With archive, also archives the node: the End + archive button on a session that said "Done:".
   end: (root, b) => {
     const remote = workerSession(String(b.session ?? ""));
@@ -82,6 +83,8 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   obsidian: (root, b) => ({ obsidian: setObsidian(root, String(b.vault ?? ""), String(b.folder ?? "")) ?? null }),
   seen: (root, b) => (markSeen(root, b.seen ?? {}, liveSessionIds(root)), {}),
   shell: (root, b) => ({ tmux: launchShell(root, String(b.path ?? "")) }),
+  consolidate: (root, b) => consolidate(root, String(b.path ?? "")),
+  finish: (root, b) => (finishRound(root, String(b.path ?? ""), !!b.accept), {}),
   closeshell: (root, b) => (closeShell(String(b.tmux ?? "")), {}),
   park: (root, b) => (setParked(root, String(b.session ?? ""), !!b.park, liveSessionIds(root)), {}),
 };
@@ -104,7 +107,7 @@ export function createServer(root: string) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     try {
-      if (url.pathname === "/api/tree") return json(res, 200, attachWorkerSessions(readTree(root), workers));
+      if (url.pathname === "/api/tree") return json(res, 200, attachRounds(root, attachWorkerSessions(readTree(root), workers)));
       if (url.pathname === "/api/seen") return json(res, 200, readSeen(root));
       if (url.pathname === "/api/shells") return json(res, 200, listShells());
       if (url.pathname === "/api/parked") return json(res, 200, readParked(root));
@@ -139,6 +142,7 @@ export function createServer(root: string) {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
         const resume = url.searchParams.get("resume") === "1";
         const host = url.searchParams.get("host") || undefined;
+        assertUnlocked(root, url.searchParams.get("path") ?? "");
         return json(res, 200, startSession(root, url.searchParams.get("path") ?? "", { resume, host }));
       }
       const op = url.pathname.match(/^\/api\/nodes\/(\w+)$/)?.[1];

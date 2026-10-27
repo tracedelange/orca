@@ -206,6 +206,8 @@ header > * { flex-shrink: 0; }
 .node.open .rim { fill: var(--paper); }
 .node.others .rim { stroke-dasharray: 3 3; fill: var(--paper); }
 .node.others .title { fill: var(--ink-3); }
+/* A node in a consolidation round is locked until you accept or reject the round. */
+.node.locked .rim { stroke: var(--accent); stroke-dasharray: 6 3; }
 .inner { stroke: var(--ink-3); stroke-width: 1; }
 .node.packed .inner { stroke: var(--ink-2); }
 .node:hover .rim { stroke-width: 2.5; }
@@ -418,6 +420,9 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .more { margin: 0 0 16px; font: 12px var(--sans); }
 #panel .more summary { cursor: pointer; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; font-size: 10px; }
 #panel .more[open] summary { margin-bottom: 12px; }
+#panel .round { border: 1px solid var(--accent); padding: 12px 14px; margin: 0 0 16px; display: grid; gap: 10px; font: 13px var(--sans); }
+#panel .round p { margin: 0; }
+#panel .round .row { display: flex; flex-wrap: wrap; gap: 8px; }
 #panel .alert { margin: 0 0 16px; font: 12px var(--sans); color: var(--accent); }
 #panel .alert[hidden] { display: none; }
 #panel .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
@@ -431,11 +436,11 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #panel .children .st { margin-left: auto; }
 #panel .children .none, #panel .docs .none { font: 12px var(--sans); color: var(--ink-3); }
 #panel .todo .sec-head label { letter-spacing: normal; text-transform: none; font: 11px var(--sans); }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form[hidden] { display: none; }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form label { display: grid; gap: 5px; }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form input, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form textarea, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form select {
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form { border: 1px solid var(--ink-3); padding: 14px; margin: 0 0 22px; display: grid; gap: 12px; }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form[hidden] { display: none; }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form label { display: grid; gap: 5px; }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form label span { font: 500 10px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form input, :is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form textarea, :is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form select {
   font: 15px var(--serif);
   color: var(--ink);
   background: var(--paper);
@@ -444,20 +449,20 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
   padding: 7px 9px;
   resize: vertical;
 }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form input:focus, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form textarea:focus, :is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form select:focus { outline: none; border-color: var(--ink); }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
-:is(#panel, #dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form .err[hidden] { display: none; }
-:is(#dispatcher, #todoer, #ender, #keyhelp, #settingsdlg, #palette) {
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form input:focus, :is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form textarea:focus, :is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form select:focus { outline: none; border-color: var(--ink); }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form .hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form .err { margin: 0; font: 12px var(--sans); color: var(--accent); }
+:is(#panel, #dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form .err[hidden] { display: none; }
+:is(#dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg, #palette) {
   width: min(560px, calc(100vw - 32px));
   padding: 0;
   border: 1px solid var(--ink-3);
   background: var(--paper-2);
   color: var(--ink);
 }
-:is(#dispatcher, #todoer, #ender, #keyhelp, #settingsdlg, #palette)::backdrop { background: rgb(0 0 0 / 0.3); }
-:is(#dispatcher, #todoer, #ender, #keyhelp, #settingsdlg) .form { border: none; margin: 0; padding: 20px; }
+:is(#dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg, #palette)::backdrop { background: rgb(0 0 0 / 0.3); }
+:is(#dispatcher, #todoer, #ender, #consolidator, #keyhelp, #settingsdlg) .form { border: none; margin: 0; padding: 20px; }
 #settingsdlg .form { padding: 0; gap: 0; }
 #settingsdlg h2 { margin: 0; padding: 20px 20px 0; font: 600 22px var(--serif); }
 #settingsdlg .tabs { display: flex; gap: 22px; padding: 0 20px; margin-top: 14px; border-bottom: 1px solid var(--ink-3); }
