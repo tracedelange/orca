@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { consolidate } from "../core/consolidate.ts";
 import { dispatch, place } from "../core/dispatch.ts";
 import { adoptSession, createNode, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
 import { hooksInstalled, installHooks, installSkill, USER_SETTINGS, USER_SKILL } from "../core/install.ts";
@@ -25,6 +26,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   new: newNode, mv: move, rm: remove, set, tree: printTree, check, init, launch: launchSession,
   "install-hooks": hooks,
   dispatch: dispatchPrompt,
+  consolidate: consolidateNode,
   end,
   claim: claimSession,
   adopt,
@@ -44,7 +46,7 @@ const HELP = `usage: orca <command>
 
 server:  up | down | status | restart | open | logs | uninstall
 nodes:   new | mv | rm | set | tree | check | init | queue | todo
-claude:  launch | dispatch | end | claim | adopt | worker | install-hooks
+claude:  launch | dispatch | consolidate | end | claim | adopt | worker | install-hooks
 child:   wait | send
 
 Sub-nodes: a session that runs \`orca dispatch\` or \`orca launch\` becomes the parent of that node.
@@ -116,8 +118,8 @@ function remove(argv: string[]) {
 }
 
 function set(argv: string[]) {
-  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: FIELDS });
-  if (positionals.length !== 1) throw new Error('usage: orca set <path> [--title "..."] [--goal "..."]');
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { ...FIELDS, archived: { type: "boolean" } } });
+  if (positionals.length !== 1) throw new Error('usage: orca set <path> [--title "..."] [--goal "..."] [--archived]');
   requireRoot();
   updateNode(root, positionals[0], values);
 }
@@ -159,6 +161,15 @@ async function dispatchPrompt(argv: string[]) {
   const d = await dispatch(root, positionals[0], positionals[1], values.host, callerNode());
   for (const p of d.created) console.log(`created ${p}`);
   console.log(`dispatched to ${d.path}${d.host ? ` on ${d.host}` : ""}; attach with: ${attachCommand(d)}`);
+}
+
+// Commits the node tree, then starts a session that proposes and applies a consolidation of the subtree.
+function consolidateNode(argv: string[]) {
+  if (argv.length !== 1) throw new Error("usage: orca consolidate <path>");
+  requireRoot();
+  const c = consolidate(root, argv[0], path.join(TEMPLATES, "consolidate.md"));
+  console.log(`snapshot ${c.commit}; skipping live nodes: ${c.live.join(", ") || "none"}`);
+  console.log(`started ${c.tmux}; attach with: ${attachCommand(c)}`);
 }
 
 // The node of the Claude session that ran this command, if any.

@@ -24,6 +24,7 @@ fs.mkdirSync(process.env.TMUX_TMPDIR!);
 
 const { installHooks, USER_SETTINGS } = await import("../src/core/install.ts");
 const { askHaiku, chooseDispatch, dismissDispatch, dispatch, listJobs, queueDispatch, retryDispatch } = await import("../src/core/dispatch.ts");
+const { consolidate } = await import("../src/core/consolidate.ts");
 const { closeShell, launch, launchShell, listShells } = await import("../src/core/sessions.ts");
 const { queueItems, runQueues } = await import("../src/core/queue.ts");
 const { flatten, readTree } = await import("../src/core/tree.ts");
@@ -189,4 +190,20 @@ test("the CLI launches and dispatches, and says how to attach", async () => {
   assert.equal(orca("launch", "work"), "started orca-work; attach with: tmux attach -t orca-work\n");
   answer({ place: { sure: true, choices: [{ path: "home/chores", title: "Chores", goal: "Done." }] } });
   assert.equal(orca("dispatch", "home", "Do the chores"), "created home/chores\ndispatched to home/chores; attach with: tmux attach -t orca-home-chores\n");
+});
+
+test("consolidate needs a git repo, commits a snapshot, and starts a session with the prompt", async () => {
+  const root = seededRoot();
+  const template = path.resolve(import.meta.dirname, "../templates/consolidate.md");
+  assert.throws(() => consolidate(root, "work", template), /is not a git repo/);
+  execFileSync("git", ["-C", root, "init", "-q"]);
+  const c = consolidate(root, "work", template);
+  assert.equal(execFileSync("git", ["-C", root, "log", "--format=%s"], { encoding: "utf8" }), "snapshot: before consolidating work\n");
+  assert.equal(execFileSync("git", ["-C", root, "status", "--porcelain"], { encoding: "utf8" }), "");
+  assert.equal(c.tmux, "orca-work");
+  const prompt = (await session()).at(-1)!;
+  assert.match(prompt, /Consolidate the subtree under this node \(work\)/);
+  assert.doesNotMatch(prompt, /\{\{/);
+  // A clean tree is not committed again.
+  assert.equal(consolidate(root, "work", template).commit, c.commit);
 });

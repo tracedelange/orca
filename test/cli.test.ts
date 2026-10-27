@@ -58,9 +58,9 @@ test("mv, rm and set change the tree", () => {
   const { root, orca, fails } = setup();
   assert.match(orca("mv", "home/household", "work/household"), /moved to work\/household/);
   assert.match(orca("rm", "work/household"), /moved to .*\.trash/);
-  orca("set", "work", "--title", "Job", "--goal", "Ship it");
+  orca("set", "work", "--title", "Job", "--goal", "Ship it", "--archived");
   const work = flatten(readTree(root)).find((n) => n.path === "work");
-  assert.deepEqual([work?.title, work?.goal], ["Job", "Ship it"]);
+  assert.deepEqual([work?.title, work?.goal, work?.archived], ["Job", "Ship it", true]);
   fails(["mv", "work"], /usage: orca mv/);
   fails(["rm"], /usage: orca rm/);
   fails(["set"], /usage: orca set/);
