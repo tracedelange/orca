@@ -1497,10 +1497,34 @@ function confirmEnd() {
   if (!row || ender.open) return;
   ender.dataset.sid = row.dataset.sid;
   ender.querySelector(".what").textContent = `End ${row.querySelector(".name").textContent}?`;
+  ender.querySelector('[value="end"]').textContent = "End session";
   ender.returnValue = "";
   ender.showModal();
 }
-ender.addEventListener("close", () => ender.returnValue === "end" && end(ender.dataset.sid));
+ender.addEventListener("close", () => {
+  if (ender.returnValue !== "end") return;
+  ender.dataset.sid ? end(ender.dataset.sid) : endAll();
+});
+
+// End all, at the foot of the rail: ends every session, background and child ones too, and
+// closes every shell, so their memory goes back to the machine. Conversations stay for Resume.
+document.getElementById("endall").addEventListener("click", () => {
+  ender.dataset.sid = "";
+  ender.querySelector(".what").textContent = `End all ${sessionsIn(tree).length} sessions and close ${shells.length} shells?`;
+  ender.querySelector('[value="end"]').textContent = "End all";
+  ender.returnValue = "";
+  ender.showModal();
+});
+
+async function endAll() {
+  if (term) closeTerminal(false);
+  await Promise.all([
+    ...sessionsIn(tree).map((s) => post("end", { session: s.sessionId }).catch(() => {})),
+    ...shells.map((sh) => post("closeshell", { tmux: sh.tmux }).catch(() => {})),
+  ]);
+  await load();
+  if (selected !== null) refreshPanel();
+}
 
 const keyhelp = document.getElementById("keyhelp");
 document.getElementById("keys").addEventListener("click", () => keyhelp.showModal());

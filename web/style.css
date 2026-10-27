@@ -317,6 +317,8 @@ button.end.armed { color: var(--accent); border-color: var(--accent); }
 #rail .rail-head.fold::before { content: "▾ "; }
 #rail .folded .rail-head.fold::before { content: "▸ "; }
 #rail .folded ol { display: none; }
+#endall { display: block; width: 100%; margin: 18px 0 12px; padding: 6px; border: 1px solid var(--ink-3); background: var(--paper); font: 500 10px var(--sans); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); cursor: pointer; }
+#endall:hover { color: var(--ink); border-color: var(--ink); }
 #rail li button {
   display: grid;
   gap: 4px;
