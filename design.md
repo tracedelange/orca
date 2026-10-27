@@ -116,6 +116,8 @@ The root `~/nodes/CLAUDE.md` is the root node. It also explains the conventions 
 
 The reporting rule tells agents to end every reply with one line: `Status: <one sentence on where things stand>`. Orca uses this line as the summary of the session.
 
+When the goal of the node is met, the agent commits its work. Then it ends the reply with `Done: <one sentence>` in place of `Status:`. Orca shows this as a request to end the session and archive the node. See [Ending a finished node](#ending-a-finished-node).
+
 ## Session tracking
 
 ### The hook
@@ -142,7 +144,7 @@ When a session outside the tree starts, the hook adds the `CLAUDE.md` chain of i
 | `SessionStart`, `Stop` | `ready` |
 | `SessionEnd` | The hook removes the session file. |
 
-On `Stop`, the hook records `finishedAt` and takes the last `Status:` line from the reply as the summary.
+On `Stop`, the hook records `finishedAt` and takes the last `Status:` line from the reply as the summary. If the reply has no `Status:` line, the hook uses the last `Done:` line. A `Done:` line also sets `done: true`. The next `UserPromptSubmit` removes `done`.
 
 A session stays live while its Claude process runs. The server removes a session file when its process ID is no longer alive.
 
@@ -154,6 +156,15 @@ A session stays live while its Claude process runs. The server removes a session
 - If the person names no node, Claude writes one or two sentences about the session, and the skill runs `orca claim --auto "<sentences>"`. Placement (see Dispatch) picks or creates the node.
 
 `orca claim` finds the Claude process above it and writes a claim for that process. It then prints the `CLAUDE.md` chain of the node, so the session learns its goal and the reporting rule. A claim ends when its process exits.
+
+### Ending a finished node
+
+A session can finish its goal and then stay open with no work to do. A session can also stop with changes on disk that it did not commit. Orca uses two mechanisms for these problems:
+
+1. **Done signal.** The root `CLAUDE.md` tells the agent to commit its work and then write `Done: <one sentence>`. The hook sets `done` on the session. The rail shows the session as "done" and gives an End + archive button. The browser notification starts with "Done". The agent does not end itself. The person makes the decision.
+2. **Commit warning.** Before End, End + archive, or ⌥Q ends a session, the viewer calls `/api/uncommitted`. The server runs `git status --porcelain` in each local `repo` of the node, and in the folder of the session when that folder is outside the tree. It returns the count of changed files. If the count is more than 0, End needs a second click and shows the count. Orca does not check repos on a worker.
+
+Orca warns. It does not block. Many sessions share one repo, and the uncommitted files can belong to a different session. A commit is sufficient. Orca does not check for unpushed commits, because some repos have no remote and some branches merge later.
 
 ### Moving a session into orca
 
@@ -278,7 +289,8 @@ A result stays new until the person opens the terminal of that session. The brow
 - Edit, Add child, Move, and Delete do the same as `orca set`, `new`, `mv`, and `rm`. Delete moves the node to `.trash`.
 - Launch and Resume start a session. A picker selects the hub or a worker.
 - Terminal, End, and Move into orca act on each session.
-- End needs a second click when the session is working or needs the person.
+- End needs a second click when the session is working or needs the person, or when the node has uncommitted files.
+- A session with `done` shows "done" and a ✓ on the rail. Its End button is End + archive.
 - Todo shows the parked ideas of the node (see Parked ideas).
 
 **Header controls.** The header is its own bar across the top of the page. The rail, the panel, and the terminal start below it. Info opens the panel for the root. New opens the Add child form for the root. Dispatch, or the `/` key, opens the Dispatch form. Todo, or ⌥T from anywhere, opens the capture dialog (see Parked ideas). The `?` button at the right end lists every hotkey.

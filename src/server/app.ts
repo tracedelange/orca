@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import pty from "node-pty";
 import { WebSocketServer } from "ws";
 import { chooseDispatch, dismissDispatch, listJobs, queueDispatch, retryDispatch } from "../core/dispatch.ts";
-import { adoptSession, createNode, docsDir, EditError, endSession, moveNode, removeNode, updateNode } from "../core/edit.ts";
+import { adoptSession, createNode, docsDir, EditError, endSession, moveNode, removeNode, uncommitted, updateNode } from "../core/edit.ts";
 import { PathError } from "../core/paths.ts";
 import { copyToObsidian, listVaults, readObsidian, setObsidian } from "../core/obsidian.ts";
 import { addToQueue, runQueues } from "../core/queue.ts";
@@ -48,12 +48,17 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   move: (root, b) => ({ path: moveNode(root, b.from, b.to) }),
   remove: (root, b) => ({ trashed: removeNode(root, b.path) }),
   update: (root, b) => (updateNode(root, b.path, b), {}),
+  // With archive, also archives the node: the End + archive button on a session that said "Done:".
   end: (root, b) => {
     const remote = workerSession(String(b.session ?? ""));
-    if (!remote) return { path: endSession(root, String(b.session ?? "")) };
-    remoteEnd(remote.w, remote.s);
-    remote.w.sessions = remote.w.sessions.filter((s) => s !== remote.s);
-    return { path: remote.s.node };
+    let p: string | undefined;
+    if (remote) {
+      remoteEnd(remote.w, remote.s);
+      remote.w.sessions = remote.w.sessions.filter((s) => s !== remote.s);
+      p = remote.s.node;
+    } else p = endSession(root, String(b.session ?? ""));
+    if (b.archive && p) updateNode(root, p, { archived: true });
+    return { path: p };
   },
   adopt: (root, b) => adoptSession(root, String(b.session ?? "")),
   dispatch: (root, b) => queueDispatch(root, b.path, String(b.prompt ?? ""), b.host || undefined),
@@ -119,6 +124,10 @@ export function createServer(root: string) {
       }
       if (url.pathname === "/api/tailnet") return json(res, 200, await readTailnet().catch(() => ({ state: "unavailable" })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
+      if (url.pathname === "/api/uncommitted") {
+        const id = url.searchParams.get("session") ?? "";
+        return json(res, 200, { count: workerSession(id) ? 0 : uncommitted(root, id) });
+      }
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
       // One node's parked ideas, or with no path, every node's.
       if (url.pathname === "/api/todos") {

@@ -183,3 +183,15 @@ test("worker sessions land on their launched node or a host-prefixed repo", asyn
   assert.deepEqual(at("home/household"), ["b"]);
   assert.deepEqual(flatten(tree).flatMap((n) => n.sessions).length, 2);
 });
+
+test("a Done: line marks the session done until the next prompt", async () => {
+  const { nextSession } = await import("../src/remote/state.mjs");
+  const extra = { pid: 1 };
+  const stop = (msg: string, prev = {}) => nextSession({ tmux: "t", ...prev }, "Stop", { session_id: "s", cwd: "x", last_assistant_message: msg }, extra);
+  const done = stop("All merged.\n\n**Done:** Feature shipped and committed.");
+  assert.equal(done.done, true);
+  assert.equal(done.summary, "Feature shipped and committed.");
+  assert.equal(stop("Status: still going").done, undefined);
+  assert.equal(nextSession({ tmux: "t", ...done }, "PostToolUse", { session_id: "s", cwd: "x" }, extra).done, true);
+  assert.equal(nextSession({ tmux: "t", ...done }, "UserPromptSubmit", { session_id: "s", cwd: "x", prompt: "one more" }, extra).done, undefined);
+});

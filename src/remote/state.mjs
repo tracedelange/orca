@@ -16,9 +16,10 @@ export function nextState(event, notification, prev = "ready") {
   return "ready"; // SessionStart, Stop
 }
 
-// Agents are asked (root CLAUDE.md) to end each reply with "Status: <one sentence>". Take the last one.
-export function statusLine(message) {
-  const matches = [...message.matchAll(/^[*_\s]*status[*_\s]*:[*_\s]*(.+?)[*_\s]*$/gim)];
+// Agents are asked (root CLAUDE.md) to end each reply with "Status: <one sentence>", or "Done: <one sentence>"
+// once the node's goal is met. Take the last line with the given label.
+export function statusLine(message, label = "status") {
+  const matches = [...message.matchAll(new RegExp(`^[*_\\s]*${label}[*_\\s]*:[*_\\s]*(.+?)[*_\\s]*$`, "gim"))];
   return matches.at(-1)?.[1];
 }
 
@@ -63,7 +64,9 @@ export function nextSession(prev, event, input, extra) {
     tmux: prev.tmux ?? tmuxSession(),
     ...extra.fields,
     state: nextState(event, input.notification_type, prev.state),
-    summary: event === "Stop" ? statusLine(input.last_assistant_message ?? "") : prev.summary,
+    summary: event === "Stop" ? (statusLine(input.last_assistant_message ?? "") ?? statusLine(input.last_assistant_message ?? "", "done")) : prev.summary,
+    // Set when the last turn ended with "Done:"; the viewer then offers End + archive.
+    done: event === "Stop" ? !!statusLine(input.last_assistant_message ?? "", "done") || undefined : event === "UserPromptSubmit" ? undefined : prev.done,
     prompt: event === "UserPromptSubmit" ? input.prompt?.trim().split("\n")[0].slice(0, 200) : prev.prompt,
     finishedAt: event === "Stop" ? new Date().toISOString() : prev.finishedAt,
     updatedAt: new Date().toISOString(),

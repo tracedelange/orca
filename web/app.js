@@ -746,16 +746,22 @@ function renderRail() {
 
 function railRow(s) {
   const st = railState(s);
-  const label = st === sessionState(s) ? STATE_LABEL[st] : st === "working" ? "child working" : "child asks";
+  const done = s.done && ["new", "ready"].includes(st);
+  const label = done ? "done" : st === sessionState(s) ? STATE_LABEL[st] : st === "working" ? "child working" : "child asks";
   const park = isParked(s)
     ? `<button type="button" class="end park" data-park="${esc(s.sessionId)}" title="Back to the rail">Unpark</button>`
     : `<button type="button" class="end park" data-park="${esc(s.sessionId)}" data-on="1" title="Move to Parked until it acts again">Park</button>`;
-  return `<li>${park}<button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button><button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
-    <span class="line"><span class="mark">${STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${label}</span></span>
+  return `<li>${park}${endButton(s, st)}<button type="button" class="a-${st}${isOpen(s) ? " open" : ""}" data-path="${esc(s.path)}" data-sid="${esc(s.sessionId)}">
+    <span class="line"><span class="mark">${done ? "✓" : STATE_MARK[st]}</span><span class="name">${esc(s.title)}</span><span class="st">${label}</span></span>
     ${s.prompt ? `<span class="sum you"${s.summary ? ` title="${esc(s.summary)}"` : ""}>${esc(s.prompt)}</span>` : ""}
     <span class="meta">${s.host ? `${esc(s.host)} · ` : ""}${esc(s.path || "/")} · ${ago(s.updatedAt)}</span>
   </button>${drawer(s)}</li>`;
 }
+
+// A session that said "Done:" offers End + archive: its node's goal is met.
+const endButton = (s, st) => s.done
+  ? `<button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" data-archive="1" title="End this session and archive its node">End + archive</button>`
+  : `<button type="button" class="end" data-end="${esc(s.sessionId)}" data-state="${st}" title="End this session">End</button>`;
 
 function shellRow(sh) {
   const title = byPath.get(sh.path)?.data.title ?? (sh.path || "/");
@@ -878,7 +884,7 @@ function alertChanges(sessions) {
   for (const s of sessions) {
     const st = lastStates.get(s.sessionId);
     if (!["needs", "new"].includes(st) || before.get(s.sessionId) === st) continue;
-    const n = new Notification(s.title, { body: st === "needs" ? "Needs you" : `Finished${s.summary ? `: ${s.summary}` : ""}`, tag: s.sessionId });
+    const n = new Notification(s.title, { body: st === "needs" ? "Needs you" : `${s.done ? "Done" : "Finished"}${s.summary ? `: ${s.summary}` : ""}`, tag: s.sessionId });
     n.onclick = () => {
       focus();
       n.close();
@@ -1081,7 +1087,7 @@ function renderSessions(sessions) {
       <span class="row">
         ${s.tmux ? `<button class="attach" type="button" data-tmux="${esc(s.tmux)}" data-host="${esc(s.host ?? "")}">Terminal</button>` : ""}
         ${!s.tmux && !s.host ? `<button class="adopt" type="button" data-adopt="${esc(s.sessionId)}"${s.state === "ready" ? "" : ` disabled title="Wait until the turn finishes"`}>Move into orca</button>` : ""}
-        <button class="end" type="button" data-end="${esc(s.sessionId)}" data-state="${sessionState(s)}">End</button>
+        ${endButton(s, sessionState(s))}
       </span>
     </li>`);
   return `<section class="sessions">
@@ -1248,26 +1254,30 @@ async function openShell(path) {
 }
 
 // Ending quits Claude; the conversation stays on disk for Resume. A session that is still
-// working or waiting on you needs a second click.
+// working or waiting on you, or whose node's repo has uncommitted files, needs a second click.
 async function endSession(button) {
-  const id = button.dataset.end;
-  if (["working", "needs"].includes(button.dataset.state) && !button.classList.contains("armed")) {
-    button.classList.add("armed");
-    button.textContent = "Sure?";
-    setTimeout(() => {
-      button.classList.remove("armed");
-      button.textContent = "End";
-    }, 3000);
-    return;
+  const { end: id, archive } = button.dataset;
+  if (!button.classList.contains("armed")) {
+    const { count } = await fetch(`/api/uncommitted?session=${encodeURIComponent(id)}`).then((r) => r.json()).catch(() => ({}));
+    if (count || ["working", "needs"].includes(button.dataset.state)) {
+      const text = button.textContent;
+      button.classList.add("armed");
+      button.textContent = count ? `${count} uncommitted · end?` : "Sure?";
+      setTimeout(() => {
+        button.classList.remove("armed");
+        button.textContent = text;
+      }, 3000);
+      return;
+    }
   }
-  return end(id);
+  return end(id, !!archive);
 }
 
-async function end(id) {
+async function end(id, archive = false) {
   const s = sessionsIn(tree).find((x) => x.sessionId === id);
   if (s && isOpen(s)) closeTerminal();
   try {
-    await post("end", { session: id });
+    await post("end", { session: id, archive });
   } catch (err) {
     return alertInPanel(err.message);
   }
@@ -1492,18 +1502,21 @@ todoForm.addEventListener("submit", async (e) => {
 
 // ⌥Q ends the current rail session, as its End button does, once Enter confirms.
 const ender = document.getElementById("ender");
-function confirmEnd() {
+async function confirmEnd() {
   const row = railRows().find(isCurrent);
   if (!row || ender.open) return;
+  const s = sessionsIn(tree).find((x) => x.sessionId === row.dataset.sid);
+  const { count } = await fetch(`/api/uncommitted?session=${encodeURIComponent(row.dataset.sid)}`).then((r) => r.json()).catch(() => ({}));
   ender.dataset.sid = row.dataset.sid;
-  ender.querySelector(".what").textContent = `End ${row.querySelector(".name").textContent}?`;
-  ender.querySelector('[value="end"]').textContent = "End session";
+  ender.dataset.archive = s?.done ? "1" : "";
+  ender.querySelector(".what").textContent = `End ${row.querySelector(".name").textContent}?${count ? ` Its repo has ${count} uncommitted files.` : ""}`;
+  ender.querySelector('[value="end"]').textContent = s?.done ? "End + archive" : "End session";
   ender.returnValue = "";
   ender.showModal();
 }
 ender.addEventListener("close", () => {
   if (ender.returnValue !== "end") return;
-  ender.dataset.sid ? end(ender.dataset.sid) : endAll();
+  ender.dataset.sid ? end(ender.dataset.sid, !!ender.dataset.archive) : endAll();
 });
 
 // End all, at the foot of the rail: ends every session, background and child ones too, and

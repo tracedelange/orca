@@ -121,3 +121,27 @@ test("obsidian copy needs a known vault, stays inside it and never overwrites", 
   setObsidian(root, "", "", [vault]);
   assert.equal(readObsidian(root), undefined);
 });
+
+test("uncommitted counts changed files in the node's local repos", async () => {
+  const { uncommitted } = await import("../src/core/edit.ts");
+  const root = seededRoot();
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "orca-repo-"));
+  execFileSync("git", ["init", "-q", repo]);
+  fs.writeFileSync(path.join(repo, "a.txt"), "a");
+  fs.writeFileSync(path.join(repo, "b.txt"), "b");
+  const dir = path.join(root, "work", "apo");
+  fs.mkdirSync(path.join(dir, ".node", "sessions"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "CLAUDE.md"), `---\ntitle: Apo\nrepo: [${repo}, box:/srv/x]\n---\n`);
+  const s = { sessionId: "u1", pid: process.pid, cwd: "x", state: "ready", updatedAt: new Date().toISOString() };
+  fs.writeFileSync(path.join(dir, ".node", "sessions", "u1.json"), JSON.stringify(s));
+
+  assert.equal(uncommitted(root, "u1"), 2);
+  execFileSync("git", ["-C", repo, "add", "."]);
+  execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"]);
+  assert.equal(uncommitted(root, "u1"), 0);
+  // A session that runs in a repo outside the tree counts that repo too, even with no repo: entry.
+  fs.writeFileSync(path.join(dir, "CLAUDE.md"), "---\ntitle: Apo\n---\n");
+  fs.writeFileSync(path.join(dir, ".node", "sessions", "u1.json"), JSON.stringify({ ...s, cwd: repo }));
+  fs.writeFileSync(path.join(repo, "c.txt"), "c");
+  assert.equal(uncommitted(root, "u1"), 1);
+});

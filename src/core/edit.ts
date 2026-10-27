@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { parseDocument, stringify } from "yaml";
 import { execFileSync } from "node:child_process";
 import { GOAL_SECTION, splitFrontmatter } from "./node.ts";
-import { resolveInRoot } from "./paths.ts";
-import { dropSession, isAlive, launch } from "./sessions.ts";
+import { expandHome, resolveInRoot } from "./paths.ts";
+import { dropSession, isAlive, launch, splitRepo } from "./sessions.ts";
 import { flatten, readTree } from "./tree.ts";
 
 const TEMPLATE = fileURLToPath(new URL("../../templates/node.md", import.meta.url));
@@ -98,6 +98,22 @@ export function endSession(root: string, id: string): string {
   else process.kill(s.pid, "SIGTERM");
   dropSession(path.join(root, node.path), s.sessionId);
   return node.path;
+}
+
+// Uncommitted files in the local repos of a live session's node, and in the session's folder when it is
+// outside the tree, so ending it can warn before work is lost. Repos on a worker are not checked.
+export function uncommitted(root: string, id: string): number {
+  const { node, s } = findSession(root, id);
+  const dirs = node.repos.map(splitRepo).filter((r) => !r.host).map((r) => path.resolve(expandHome(r.path)));
+  if (!(s.cwd + path.sep).startsWith(root + path.sep)) dirs.push(s.cwd);
+  let count = 0;
+  for (const dir of new Set(dirs)) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      count += execFileSync("git", ["-C", dir, "status", "--porcelain"], { encoding: "utf8", stdio: "pipe" }).split("\n").filter(Boolean).length;
+    } catch {} // not a git repo
+  }
+  return count;
 }
 
 // Moves a session that runs outside tmux into orca: quits that Claude (which saves the conversation),
