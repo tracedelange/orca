@@ -27,6 +27,9 @@
     <button id="theme" type="button" title="Theme: system, light or dark"></button>
     <button id="settings" type="button">Settings</button>
     <button id="keys" type="button" title="Keyboard shortcuts">?</button>
+    <!-- On a phone the other buttons fold into Menu, and Find opens the palette. -->
+    <button id="find" type="button">Find</button>
+    <button id="menubtn" type="button" aria-expanded="false">Menu</button>
   </header>
 
   <svg id="map">
@@ -190,6 +193,8 @@
         <div class="md"></div>
       </article>
     </div>
+    <!-- Keys a phone keyboard lacks. Shown on touch screens only. -->
+    <div class="keybar"></div>
   </section>
 
   <script src="/vendor/d3.js"></script>

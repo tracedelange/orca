@@ -69,6 +69,23 @@ railButton.addEventListener("click", () => {
   renderRail();
 });
 
+// ---- Phone: the rail fills the screen, the other header buttons fold into Menu ----
+
+const phone = matchMedia("(max-width: 700px)");
+const menuButton = document.getElementById("menubtn");
+const setMenu = (open) => {
+  document.body.classList.toggle("menu-open", open);
+  menuButton.setAttribute("aria-expanded", open);
+};
+menuButton.addEventListener("click", () => setMenu(!document.body.classList.contains("menu-open")));
+// Any other header button closes the menu once it has run.
+document.querySelector("header").addEventListener("click", (e) => e.target.closest("button:not(#menubtn)") && setMenu(false));
+document.getElementById("find").addEventListener("click", () => openPalette());
+// iOS keeps the layout height when the keyboard opens, so --kb lifts the terminal above it.
+visualViewport?.addEventListener("resize", () => {
+  document.documentElement.style.setProperty("--kb", `${innerHeight - visualViewport.height}px`);
+});
+
 // ---- Data ----
 
 async function load() {
@@ -670,6 +687,8 @@ function ticked() {
 
 // The free space between the rail and the panel.
 function measure() {
+  // On a phone the rail and the panel cover the map rather than sit beside it.
+  if (phone.matches) return { cx: innerWidth / 2, cy: innerHeight / 2 + 20 };
   const left = rail.hidden ? 0 : rail.offsetWidth;
   const right = selected !== null && !panel.hidden ? panel.offsetWidth : 0;
   return { cx: left + (innerWidth - left - right) / 2, cy: innerHeight / 2 + 20 };
@@ -1963,6 +1982,7 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   });
   const ro = new ResizeObserver(resize);
   ro.observe(el);
+  termview.querySelector(".keybar").hidden = watch;
   term = { xterm, ws, ro, name, path, host, watch };
   lastTerm = { name, path, host };
   renderRail();
@@ -1974,6 +1994,13 @@ function termTheme() {
   const v = (name) => css.getPropertyValue(name).trim();
   return { background: v("--paper-2"), foreground: v("--ink"), cursor: v("--ink"), selectionBackground: v("--ink-3") };
 }
+
+// input() goes through onData, so a key bar Enter counts as a reply, like a typed one.
+const KEYBAR = { Esc: "\x1b", Tab: "\t", "⇧Tab": "\x1b[Z", "↑": "\x1b[A", "↓": "\x1b[B", "←": "\x1b[D", "→": "\x1b[C", "^C": "\x03", "↵": "\r" };
+const keybar = termview.querySelector(".keybar");
+keybar.innerHTML = Object.keys(KEYBAR).map((k) => `<button type="button">${k}</button>`).join("");
+keybar.addEventListener("pointerdown", (e) => e.preventDefault()); // keep focus in the terminal, so the keyboard stays up
+keybar.addEventListener("click", (e) => e.target.matches("button") && term?.xterm.input(KEYBAR[e.target.textContent]));
 
 termview.querySelector(".takeover").addEventListener("click", () => openTerminal(term.name, term.path, term.host));
 termview.querySelector(".docsdir").addEventListener("click", (e) => {

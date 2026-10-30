@@ -597,3 +597,49 @@ a.button { display: inline-block; text-decoration: none; }
 #panel .todo .tedit input { width: 100%; font: inherit; }
 #panel .todo .tnew { margin-top: 10px; }
 #panel .todo-err { margin: 6px 0 0; font: 12px var(--sans); color: var(--accent); }
+
+/* ---- Touch screens: no hover, no Esc key ---- */
+#find, #menubtn { display: none; }
+#termview .keybar { display: none; }
+@media (hover: none) {
+  #rail li button.end { opacity: 1; }
+  /* The row buttons sit over the right of the name line. */
+  #rail li:has(button.end) .line { padding-right: 140px; }
+  .node.selected .add { opacity: 1; }
+  #termview .keys { display: none; }
+  #termview .keybar:not([hidden]) { display: flex; gap: 4px; padding-top: 8px; }
+  #termview .keybar button { flex: 1 1 0; min-width: 0; padding: 12px 0; font-size: 12px; letter-spacing: 0; }
+  #panel kbd { display: none; }
+}
+
+/* ---- Phone: the rail is the home screen; the panel and terminal fill it ---- */
+@media (max-width: 700px) {
+  :root { --bar: 56px; }
+  header { padding: 0 16px; gap: 8px; }
+  .menu-open header { flex-wrap: wrap; align-content: flex-start; height: auto; min-height: var(--bar); padding: 10px 16px 14px; row-gap: 10px; }
+  #logo { width: 28px; height: 28px; }
+  #crumbs { flex: 1; }
+  #find, #menubtn { display: inline-block; }
+  header button { padding: 9px 10px; }
+  /* Folded into Menu: usage and the buttons the phone does not need at hand. */
+  :is(#usage, #about, #new, #dispatch, #todos, #archived, #theme, #settings, #keys) { display: none; order: 2; }
+  .menu-open :is(#about, #new, #dispatch, #todos, #archived, #theme, #settings) { display: inline-block; }
+  .menu-open #usage { display: flex; flex-wrap: wrap; order: 1; flex-basis: 100%; margin: 0; }
+  .mode-term :is(#railbtn, #find) { display: none; }
+  .mode-term.menu-open :is(#about, #new, #archived) { display: none; }
+
+  #rail, body:not(.mode-term) #rail { right: 0; bottom: 0; width: auto; padding: 0 16px; border: none; }
+  #rail li button { padding: 12px 10px; }
+  #legend, #hint { display: none; }
+
+  #panel { width: 100%; padding: 16px 16px 40px; border-left: none; }
+  #panel h1 { font-size: 26px; margin-top: 18px; }
+
+  #termview { left: 0 !important; bottom: var(--kb, 0px); padding: 6px 8px 8px; border-left: none; }
+  #termview .top { gap: 8px; }
+  #termview .docsdir { display: none; }
+  #termview .split { flex-direction: column; gap: 8px; }
+  #doc { border-left: none; border-top: 1px solid var(--ink-3); padding: 8px 0 0; }
+
+  #palette { margin-top: 8px; }
+}
