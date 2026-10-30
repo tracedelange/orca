@@ -1,8 +1,8 @@
 const POLL_MS = 5000;
 // A node's state comes from its sessions, most urgent first. A packed node also counts what it hides.
-const STATES = ["needs", "new", "working", "ready", "idle"];
-const STATE_LABEL = { needs: "needs you", new: "new result", working: "working", ready: "seen", idle: "idle" };
-const STATE_MARK = { needs: "◆", new: "◉", working: "●", ready: "○", idle: "·" };
+const STATES = ["needs", "new", "working", "monitoring", "ready", "idle"];
+const STATE_LABEL = { needs: "needs you", new: "new result", working: "working", monitoring: "monitoring", ready: "seen", idle: "idle" };
+const STATE_MARK = { needs: "◆", new: "◉", working: "●", monitoring: "◐", ready: "○", idle: "·" };
 
 const svg = d3.select("#map");
 const gView = svg.append("g");                       // pan and zoom apply here
@@ -487,7 +487,7 @@ function isHot(d) {
   if (selected !== null && within(selected, d.data.path)) return true;
   const since = new Date(Date.now() - idleMinutes * 60000).toISOString();
   return d.descendants().some((x) => (x.data.lastActive ?? "") > since
-    || x.data.sessions.some((s) => s.updatedAt > since || ["needs", "new", "working"].includes(sessionState(s))));
+    || x.data.sessions.some((s) => s.updatedAt > since || ["needs", "new", "working", "monitoring"].includes(sessionState(s))));
 }
 
 // A stand-in for a parent's idle children. It draws like a leaf; clicking it shows them.
@@ -655,6 +655,7 @@ function rimText(d) {
     count("needs") && "needs you",
     count("new") && `${count("new")} new`,
     count("working") && `${count("working")} working`,
+    count("monitoring") && `${count("monitoring")} monitoring`,
     d.data.issues.length && `${d.data.issues.length} to check`,
   ].filter(Boolean).join("  ·  ").toUpperCase();
 }
@@ -753,10 +754,10 @@ function renderRail() {
 
   const wasHidden = rail.hidden;
   rail.hidden = railOff || (!sessions.length && !jobs.length && !shells.length);
-  // Working sessions get their own section at the top; the rest stay most urgent first.
+  // Working and monitoring sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
   const groups = { working: jobs.map(jobRow), rest: [], parked: [], shells: shells.map(shellRow) };
-  for (const s of sessions) groups[isParked(s) ? "parked" : railState(s) === "working" ? "working" : "rest"].push(railRow(s));
+  for (const s of sessions) groups[isParked(s) ? "parked" : ["working", "monitoring"].includes(railState(s)) ? "working" : "rest"].push(railRow(s));
   for (const [name, list] of Object.entries(groups)) {
     const section = rail.querySelector(`[data-group="${name}"]`);
     section.hidden = !list.length;
@@ -1360,7 +1361,7 @@ async function endSession(button) {
   const { end: id, archive } = button.dataset;
   if (!button.classList.contains("armed")) {
     const { count } = await fetch(`/api/uncommitted?session=${encodeURIComponent(id)}`).then((r) => r.json()).catch(() => ({}));
-    if (count || ["working", "needs"].includes(button.dataset.state)) {
+    if (count || ["working", "monitoring", "needs"].includes(button.dataset.state)) {
       const text = button.textContent;
       button.classList.add("armed");
       button.textContent = count ? `${count} uncommitted · end?` : "Sure?";

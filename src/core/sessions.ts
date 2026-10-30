@@ -7,7 +7,8 @@ import { expandHome, resolveInRoot } from "./paths.ts";
 import { isAlive } from "../remote/state.mjs";
 
 // working: Claude is running. needs-input: blocked on a permission or question. ready: turn finished.
-export type SessionState = "working" | "needs-input" | "ready";
+// monitoring: turn finished with "Monitoring:", so the agent is watching a job or waiting on a reply.
+export type SessionState = "working" | "needs-input" | "ready" | "monitoring";
 
 export type Session = {
   sessionId: string;

@@ -37,4 +37,4 @@ Code, scripts, builds and dependencies go in a repo outside this tree. Name it i
 Write documents for the user (plans, reports, reviews) in `docs/`, and give each file's full path in your reply.
 
 ## Reporting
-End every reply with one line: `Status: <one sentence on where things stand>`. The viewer shows it. When the node's Goal is met, commit your work, then end with `Done: <one sentence>` in place of `Status:`. The user can then end the session and archive the node.
+End every reply with one line: `Status: <one sentence on where things stand>`. The viewer shows it. If you end your turn while a job you started runs or while you wait on a reply, end with `Monitoring: <what you are watching>` in place of `Status:`. When the node's Goal is met, commit your work, then end with `Done: <one sentence>` in place of `Status:`. The user can then end the session and archive the node.

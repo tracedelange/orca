@@ -18,7 +18,7 @@ import { daemon } from "./daemon.ts";
 
 const root = rootDir();
 const TEMPLATES = fileURLToPath(new URL("../../templates/", import.meta.url));
-const MARKS: Record<string, string> = { "needs-input": "◆", working: "●", ready: "○" };
+const MARKS: Record<string, string> = { "needs-input": "◆", working: "●", monitoring: "◐", ready: "○" };
 // `orca new` and `orca set` take the same fields.
 const FIELDS = { title: { type: "string" }, goal: { type: "string" } } as const;
 

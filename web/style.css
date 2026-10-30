@@ -180,6 +180,7 @@ header > * { flex-shrink: 0; }
 /* State, most urgent first. Idle is the dashed default above. */
 .a-ready .rim { stroke-dasharray: none; }
 .a-working .rim { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: none; fill: var(--paper-2); }
+.a-monitoring .rim { stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: none; fill: var(--paper-2); }
 .a-new .rim { stroke: var(--ink); stroke-width: 3; stroke-dasharray: none; fill: var(--paper-2); }
 .a-needs .rim {
   stroke: var(--accent);
@@ -267,6 +268,7 @@ header > * { flex-shrink: 0; }
 .dot circle { pointer-events: none; }
 .dot.working circle { fill: var(--ink); }
 .dot.ready circle { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
+.dot.monitoring circle { fill: var(--ink-2); }
 .dot.needs circle { fill: var(--accent); }
 .dot.new circle { fill: var(--ink); stroke: var(--paper); stroke-width: 1.5; }
 .dot.working .spin { animation: orbit 3s linear infinite; }

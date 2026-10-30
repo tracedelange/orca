@@ -7,6 +7,7 @@ import path from "node:path";
 export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"];
 
 // working: Claude is running. needs-input: blocked on a permission or question. ready: turn finished.
+// monitoring: turn finished, but the agent is watching a job or waiting on a reply (see nextSession).
 export function nextState(event, notification, prev = "ready") {
   if (event === "UserPromptSubmit" || event === "PostToolUse") return "working";
   if (event === "Notification") {
@@ -16,8 +17,8 @@ export function nextState(event, notification, prev = "ready") {
   return "ready"; // SessionStart, Stop
 }
 
-// Agents are asked (root CLAUDE.md) to end each reply with "Status: <one sentence>", or "Done: <one sentence>"
-// once the node's goal is met. Take the last line with the given label.
+// Agents are asked (root CLAUDE.md) to end each reply with "Status: <one sentence>", "Monitoring: <one sentence>"
+// while they watch a job or wait on a reply, or "Done: <one sentence>" once the node's goal is met. Take the last line with the given label.
 export function statusLine(message, label = "status") {
   const matches = [...message.matchAll(new RegExp(`^[*_\\s]*${label}[*_\\s]*:[*_\\s]*(.+?)[*_\\s]*$`, "gim"))];
   return matches.at(-1)?.[1];
@@ -57,16 +58,18 @@ export function isAlive(pid) {
 
 // The next session state, given the previous one and a hook event.
 export function nextSession(prev, event, input, extra) {
+  const last = input.last_assistant_message ?? "";
+  const monitoring = event === "Stop" ? statusLine(last, "monitoring") : undefined;
   return {
     sessionId: input.session_id,
     pid: prev.pid ?? extra.pid ?? findClaudePid(),
     cwd: input.cwd,
     tmux: prev.tmux ?? tmuxSession(),
     ...extra.fields,
-    state: nextState(event, input.notification_type, prev.state),
-    summary: event === "Stop" ? (statusLine(input.last_assistant_message ?? "") ?? statusLine(input.last_assistant_message ?? "", "done")) : prev.summary,
+    state: monitoring ? "monitoring" : nextState(event, input.notification_type, prev.state),
+    summary: event === "Stop" ? (statusLine(last) ?? monitoring ?? statusLine(last, "done")) : prev.summary,
     // Set when the last turn ended with "Done:"; the viewer then offers End + archive.
-    done: event === "Stop" ? !!statusLine(input.last_assistant_message ?? "", "done") || undefined : event === "UserPromptSubmit" ? undefined : prev.done,
+    done: event === "Stop" ? !!statusLine(last, "done") || undefined : event === "UserPromptSubmit" ? undefined : prev.done,
     prompt: event === "UserPromptSubmit" ? input.prompt?.trim().split("\n")[0].slice(0, 200) : prev.prompt,
     finishedAt: event === "Stop" ? new Date().toISOString() : prev.finishedAt,
     updatedAt: new Date().toISOString(),

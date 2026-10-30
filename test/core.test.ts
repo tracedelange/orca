@@ -184,6 +184,17 @@ test("worker sessions land on their launched node or a host-prefixed repo", asyn
   assert.deepEqual(flatten(tree).flatMap((n) => n.sessions).length, 2);
 });
 
+test("a Monitoring: line marks the session monitoring until it acts again", async () => {
+  const { nextSession } = await import("../src/remote/state.mjs");
+  const extra = { pid: 1 };
+  const watching = nextSession({ tmux: "t" }, "Stop", { session_id: "s", cwd: "x", last_assistant_message: "Started.\n\nMonitoring: training run on gpu-box" }, extra);
+  assert.equal(watching.state, "monitoring");
+  assert.equal(watching.summary, "training run on gpu-box");
+  assert.equal(nextSession({ tmux: "t", ...watching }, "Notification", { session_id: "s", cwd: "x", notification_type: "idle_prompt" }, extra).state, "monitoring");
+  assert.equal(nextSession({ tmux: "t", ...watching }, "UserPromptSubmit", { session_id: "s", cwd: "x", prompt: "done?" }, extra).state, "working");
+  assert.equal(nextSession({ tmux: "t" }, "Stop", { session_id: "s", cwd: "x", last_assistant_message: "Status: fine" }, extra).state, "ready");
+});
+
 test("a Done: line marks the session done until the next prompt", async () => {
   const { nextSession } = await import("../src/remote/state.mjs");
   const extra = { pid: 1 };
