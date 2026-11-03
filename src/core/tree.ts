@@ -49,10 +49,17 @@ export function readNodeDetail(root: string, rel: string) {
     ...fields,
     sessions: readSessions(dir),
     docs: listDocs(dir),
+    map: readMap(dir),
     queue: queueItems(body),
     body,
     html: toHtml(body),
   };
+}
+
+// The node's draw.io map, docs/map.drawio, as XML; null when it has none.
+function readMap(dir: string) {
+  const file = path.join(dir, "docs", "map.drawio");
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 }
 
 // The markdown files in the node's docs/ folder, newest first.

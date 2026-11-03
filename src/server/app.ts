@@ -1,7 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateRawSync } from "node:zlib";
 import pty from "node-pty";
 import { WebSocketServer } from "ws";
 import { assertUnlocked, attachRounds, consolidate, finishRound } from "../core/consolidate.ts";
@@ -30,6 +32,7 @@ const STATIC: Record<string, [string, string]> = {
   "/app.js": [file("../../web/app.js"), JS],
   "/style.css": [file("../../web/style.css"), "text/css; charset=utf-8"],
   "/orca.svg": [file("../../web/orca.svg"), "image/svg+xml"],
+  "/vendor/drawio-viewer.js": [file("../../web/vendor/drawio-viewer.js"), JS],
   "/vendor/d3.js": [dep("d3", "../dist/d3.min.js"), JS],
   "/vendor/xterm.js": [dep("@xterm/xterm", "xterm.js"), JS],
   "/vendor/xterm.css": [dep("@xterm/xterm", "../css/xterm.css"), "text/css; charset=utf-8"],
@@ -77,6 +80,17 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   open: (root, b) => (execFileSync("open", [docPath(root, String(b.path ?? ""))]), {}),
   // Selects the document in a Finder window.
   reveal: (root, b) => (execFileSync("open", ["-R", docPath(root, String(b.path ?? ""))]), {}),
+  // Opens the node's map in draw.io desktop. Without it, returns a link that opens a copy in app.diagrams.net.
+  map: (root, b) => {
+    const map = path.join(docsDir(root, String(b.path ?? "")), "map.drawio");
+    try {
+      execFileSync("open", ["-a", "draw.io", map], { stdio: "ignore" });
+      return {};
+    } catch {
+      const data = deflateRawSync(encodeURIComponent(fs.readFileSync(map, "utf8"))).toString("base64");
+      return { url: `https://app.diagrams.net/#R${encodeURIComponent(data)}` };
+    }
+  },
   // Opens the node's docs folder in Finder.
   finder: (root, b) => (execFileSync("open", [docsDir(root, String(b.path ?? ""))]), {}),
   copy: (root, b) => ({ copied: copyToObsidian(root, docPath(root, String(b.path ?? ""))) }),

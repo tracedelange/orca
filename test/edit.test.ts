@@ -145,3 +145,11 @@ test("uncommitted counts changed files in the node's local repos", async () => {
   fs.writeFileSync(path.join(repo, "c.txt"), "c");
   assert.equal(uncommitted(root, "u1"), 1);
 });
+
+test("node detail carries docs/map.drawio as XML", () => {
+  const root = seededRoot();
+  assert.equal(readNodeDetail(root, "work").map, null);
+  fs.mkdirSync(path.join(root, "work", "docs"), { recursive: true });
+  fs.writeFileSync(path.join(root, "work", "docs", "map.drawio"), "<mxfile/>");
+  assert.equal(readNodeDetail(root, "work").map, "<mxfile/>");
+});

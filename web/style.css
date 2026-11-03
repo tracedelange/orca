@@ -540,6 +540,8 @@ select.where {
 }
 a.button { display: inline-block; text-decoration: none; }
 .copied { font: 11px var(--sans); color: var(--ink-2); }
+#panel .map { margin: 0 0 22px; }
+#panel .mapview { background: #fff; border: 1px solid var(--rule); overflow: hidden; cursor: zoom-in; }
 #panel .docs { margin: 0 0 22px; }
 #panel .docs ul { list-style: none; margin: 0; padding: 0; }
 #panel .docs li { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule); font: 13px var(--sans); }

@@ -1060,6 +1060,8 @@ function renderPanel(n) {
     if (typed.focused) input.focus();
   }
   markRow();
+  const mapview = panel.querySelector(".mapview");
+  if (mapview) showMap(mapview, n.map);
   if (panelTab === "todo") {
     todoScope = n.path;
     renderTodos();
@@ -1067,7 +1069,7 @@ function renderPanel(n) {
 }
 
 function renderTab(n) {
-  if (panelTab === "node") return renderChildren(byPath.get(n.path)?.children ?? []) + renderSessions(n.sessions);
+  if (panelTab === "node") return (n.map ? renderMap() : "") + renderChildren(byPath.get(n.path)?.children ?? []) + renderSessions(n.sessions);
   if (panelTab === "docs") return renderDocs(n.docs);
   if (panelTab === "notes") return `<div class="md">${n.html}</div>`;
   if (panelTab === "queue") return renderQueue(n.queue);
@@ -1079,6 +1081,42 @@ function setTab(t) {
   panelTab = t;
   panelRow = -1;
   renderPanel(panelNode);
+}
+
+// ---- Map: the node's docs/map.drawio, drawn by the vendored draw.io viewer ----
+
+function renderMap() {
+  return `<section class="map">
+    <div class="sec-head"><span>Map</span><button class="openmap" type="button" title="Edit docs/map.drawio">Open in draw.io</button></div>
+    <div class="mapview" title="Click to see the whole map"></div>
+  </section>`;
+}
+
+// The viewer script is 5 MB, so it loads the first time a panel shows a map.
+let drawio;
+function loadDrawio() {
+  drawio ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "/vendor/drawio-viewer.js";
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.append(s);
+  });
+  return drawio;
+}
+
+async function showMap(el, xml) {
+  await loadDrawio();
+  el.setAttribute("data-mxgraph", JSON.stringify({ xml, toolbar: "zoom lightbox", nav: true, resize: true, "max-height": "560px" }));
+  GraphViewer.createViewerForElement(el);
+}
+
+// draw.io desktop edits the file in place. Without it, the server returns a link to a copy in app.diagrams.net.
+function openMap(button) {
+  post("map", { path: selected }).then(
+    (r) => r.url && window.open(r.url, "_blank", "noopener"),
+    (err) => ((button.textContent = "Can't open"), (button.title = err.message)),
+  );
 }
 
 function renderChildren(kids) {
@@ -2125,6 +2163,8 @@ panel.addEventListener("click", (e) => {
   if (open) openForm(open.dataset.form);
   const finder = e.target.closest(".finder");
   if (finder) popout(finder, selected, "finder");
+  const openmap = e.target.closest(".openmap");
+  if (openmap) openMap(openmap);
   if (e.target.closest(".newtodo")) openTodoer();
   const tab = e.target.closest("[data-tab]");
   if (tab) setTab(tab.dataset.tab);
