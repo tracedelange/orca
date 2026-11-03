@@ -62,3 +62,12 @@ Write the file as uncompressed draw.io XML:
 - Lay the work out left to right in the order it happened. Put boxes that build on the same box in one column. Leave 60 px between boxes.
 - Use only plain shapes: boxes, arrows and text. Stencil shapes and images need the network.
 - Escape `<`, `>`, `&` and `"` inside `value`.
+
+Write the box text so a reader who did not do the work understands it. If the `simple-english` skill is installed, use it when you write the text.
+
+- Keep a title to 5 words or fewer. Name the work, not the method: "Dollars per trip", not "LODES-WAC spend regression v2".
+- Keep the result line to 15 words or fewer.
+- Use common words. Do not use an abbreviation unless the node's own docs use it.
+- Give a number with its unit and what it measures: "R² 0.61 on held-out counties", not "0.61".
+- Say what happened, not what the work tried to do: "failed: no canopy signal at any scale".
+- Use one name for each thing on the whole map. If a child node exists, use its title.
