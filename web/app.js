@@ -368,37 +368,27 @@ addEventListener("resize", drawStars);
 
 // ---- Orbit ----
 
-// The subtree of the open node nearest the view centre turns slowly around it: one turn in ORBIT_S seconds at 1x.
+// The whole graph turns slowly around the root, pinned at 0,0: one turn in ORBIT_S seconds at 1x.
+// A rigid turn about the centre of the depth rings keeps the layout valid, so the stopped simulation needs no correction.
 // It holds still while a button is down or the pointer is on a node, so clicks and drags land where you aim.
 const ORBIT_S = 600;
 const calm = matchMedia("(prefers-reduced-motion: reduce)");
-let pivot = null; // re-picked after each pan or zoom and each render
 let held = false, onNode = false;
 addEventListener("pointerdown", () => (held = true));
 addEventListener("pointerup", () => (held = false));
 svg.on("pointerover.orbit", (e) => (onNode = !!e.target.closest("g.node")));
-zoom.on("end.orbit", () => (pivot = null));
-
-function pickPivot() {
-  const t = d3.zoomTransform(svg.node());
-  const [x, y] = t.invert([center.cx, center.cy]);
-  return d3.least(sim.nodes().filter((n) => n.d.children && isUnpacked(n.d)), (n) => (n.x - x) ** 2 + (n.y - y) ** 2);
-}
 
 let last = 0;
 d3.timer((now) => {
   const dt = Math.min(now - last, 100) / 1000;
   last = now;
   if (!motion || !knobs.orbit || calm.matches || held || onNode) return;
-  pivot ??= pickPivot();
-  if (!pivot) return;
   const a = (2 * Math.PI * knobs.orbit * dt) / ORBIT_S, cos = Math.cos(a), sin = Math.sin(a);
-  const under = (d) => { for (let a = d.parent; a; a = a.parent) if (a === pivot.d) return true; };
   for (const n of sim.nodes()) {
-    if (n.fx != null || !under(n.d)) continue;
-    const dx = n.x - pivot.x, dy = n.y - pivot.y;
-    n.x = pivot.x + dx * cos - dy * sin;
-    n.y = pivot.y + dx * sin + dy * cos;
+    if (n.fx != null) continue;
+    const { x, y } = n;
+    n.x = x * cos - y * sin;
+    n.y = x * sin + y * cos;
   }
   ticked();
 });
@@ -540,7 +530,6 @@ function render() {
     // A gentle nudge: new nodes already start near their place, so the rest barely moves.
     sim.alpha(shownKey ? 0.3 : 1).restart();
     shownKey = key;
-    pivot = null;
   }
 
   const t = d3.transition().duration(GROW_MS).ease(EASE);
