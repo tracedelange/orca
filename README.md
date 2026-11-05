@@ -198,7 +198,7 @@ orca dispatch work "..." --host my-worker
 - "Needs you" and "new result" use the accent color. Seen sessions are gray.
 - A result stays new until you open its session. The server keeps this record, so all of your devices agree.
 - The tab title shows the number of sessions that need you.
-- A session stays in the rail while its Claude process runs. End (on hover in the rail, or in the panel) stops it. A working session needs a second click. The conversation stays on disk, and Resume in the panel opens it again.
+- A session stays in the rail while its Claude process runs. End (on hover in the rail, or in the panel) stops it. A working session needs a second click. The conversation stays on disk, and Open in the panel resumes it.
 
 ### Terminals
 

@@ -1011,8 +1011,7 @@ function renderPanel(n) {
     ${n.goal ? `<p class="goal">${esc(n.goal)}</p>` : ""}
     ${roundBanner(n.path)}
     <div class="actions">
-      <button class="resume" type="button"><kbd>r</kbd>Resume</button>
-      <button class="launch" type="button"><kbd>l</kbd>Launch</button>
+      <button class="open" type="button" title="Open the live session, or resume the last conversation"><kbd>r</kbd>Open</button>
       <button class="shell" type="button" title="Open a terminal in this node's folder"><kbd>s</kbd>Shell</button>
       <button data-form="child" type="button"><kbd>n</kbd>Add child</button>
       <button class="newtodo" type="button"><kbd>t</kbd>Add todo</button>
@@ -1036,7 +1035,7 @@ function renderPanel(n) {
     <nav class="tabs">${TABS.map((t, i) => `<button type="button" data-tab="${t}"${t === panelTab ? ' class="on"' : ""}><kbd>${i + 1}</kbd>${labels[t]}</button>`).join("")}</nav>
     <div class="tabbody">${renderTab(n)}</div>`;
   if (byPath.get(n.path)?.data.lock !== undefined) {
-    for (const b of panel.querySelectorAll(".resume, .launch, [data-form], [data-archive], .consolidate")) b.disabled = true;
+    for (const b of panel.querySelectorAll(".open, [data-form], [data-archive], .consolidate")) b.disabled = true;
   }
   // The goal shows under the title and the queue has its own tab; drop their body sections.
   for (const h of [...panel.querySelectorAll(".md h2")].filter((el) => ["goal", "queue"].includes(el.textContent.trim().toLowerCase()))) {
@@ -1296,9 +1295,9 @@ async function adoptSession(button) {
   }
 }
 
-async function launchSession(resume) {
+async function launchSession() {
   const host = panel.querySelector(".where")?.value ?? "";
-  const q = `path=${encodeURIComponent(selected)}${resume ? "&resume=1" : ""}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
+  const q = `path=${encodeURIComponent(selected)}&resume=1${host ? `&host=${encodeURIComponent(host)}` : ""}`;
   const res = await fetch(`/api/launch?${q}`, { method: "POST" });
   const body = await res.json();
   if (!res.ok) return alertInPanel(body.error);
@@ -1382,7 +1381,7 @@ async function openShell(path) {
   }
 }
 
-// Ending quits Claude; the conversation stays on disk for Resume. A session that is still
+// Ending quits Claude; the conversation stays on disk for Open. A session that is still
 // working or waiting on you, or whose node's repo has uncommitted files, needs a second click.
 async function endSession(button) {
   const { end: id, archive } = button.dataset;
@@ -1649,7 +1648,7 @@ ender.addEventListener("close", () => {
 });
 
 // End all, at the foot of the rail: ends every session, background and child ones too, and
-// closes every shell, so their memory goes back to the machine. Conversations stay for Resume.
+// closes every shell, so their memory goes back to the machine. Conversations stay for Open.
 document.getElementById("endall").addEventListener("click", () => {
   ender.dataset.sid = "";
   ender.querySelector(".what").textContent = `End all ${sessionsIn(tree).length} sessions and close ${shells.length} shells?`;
@@ -1760,14 +1759,14 @@ async function openNode(path) {
   await select(path);
 }
 
-// Opens the node's live terminal if it has one; otherwise resumes its last conversation, as the panel's Resume does.
+// Opens the node's live terminal if it has one; otherwise resumes its last conversation, or starts one.
 async function resumeNode(path) {
   const s = withNode(byPath.get(path)).filter((x) => x.tmux).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   if (s && term) return openTerminal(s.tmux, path, s.host);
   reveal(path);
   await select(path);
   if (s) openTerminal(s.tmux, path, s.host);
-  else launchSession(true);
+  else launchSession();
 }
 
 paletteInput.addEventListener("input", renderPalette);
@@ -2165,8 +2164,7 @@ panel.addEventListener("click", (e) => {
     todoDone = e.target.checked;
     renderTodos();
   }
-  if (e.target.closest(".launch")) launchSession(false);
-  if (e.target.closest(".resume")) launchSession(true);
+  if (e.target.closest(".open")) resumeNode(selected);
   if (e.target.closest(".shell")) openShell(selected);
   if (e.target.closest(".consolidate")) confirmConsolidate(selected);
   const finish = e.target.closest("[data-finish]");
@@ -2193,7 +2191,7 @@ panel.addEventListener("click", (e) => {
 });
 
 // Keys for the open panel, while nothing takes typing. Returns whether it used the key.
-const PANEL_KEYS = { r: ".resume", l: ".launch", s: ".shell", n: '[data-form="child"]', t: ".newtodo", e: '[data-form="edit"]' };
+const PANEL_KEYS = { r: ".open", s: ".shell", n: '[data-form="child"]', t: ".newtodo", e: '[data-form="edit"]' };
 // What Enter opens in a row: a child's panel, a doc, a session's terminal, a todo's node.
 const ROW_OPEN = "[data-reveal], [data-doc], .attach";
 

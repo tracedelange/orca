@@ -126,7 +126,7 @@ export function adoptSession(root: string, id: string): { tmux: string; path: st
   process.kill(s.pid, "SIGTERM");
   const deadline = Date.now() + 10_000;
   while (isAlive(s.pid)) {
-    if (Date.now() > deadline) throw new EditError(`Claude (pid ${s.pid}) did not exit; quit it by hand and use Resume`);
+    if (Date.now() > deadline) throw new EditError(`Claude (pid ${s.pid}) did not exit; quit it by hand and use Open`);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
   }
   dropSession(path.join(root, node.path), s.sessionId);

@@ -76,7 +76,7 @@ export function readSessions(nodeDir: string): Session[] {
 
 export type LaunchOptions = {
   prompt?: string;   // Claude starts on it straight away
-  resume?: boolean;  // reopen the node's last conversation
+  resume?: boolean;  // reopen the node's last conversation, or start one if it has none
   resumeId?: string; // reopen this conversation; needs the folder it ran in as cwd
   cwd?: string;      // defaults to the node folder
   model?: string;
@@ -96,8 +96,13 @@ export function launch(root: string, rel: string, opts: LaunchOptions = {}): str
   const last = opts.resume && !opts.resumeId ? readLastSession(dir) : undefined;
   if (last) opts = { ...opts, resumeId: last.sessionId, cwd: last.cwd };
 
-  const base = tmuxBase(root, dir);
+  // One interactive session per node: a second Claude on the same conversation forks it, and the
+  // viewer would attach to only one copy. A prompt starts a separate job (queue, consolidation).
   const live = liveTmuxSessions();
+  const running = opts.prompt ? undefined : readSessions(dir).find((s) => s.tmux && live.has(s.tmux));
+  if (running) return running.tmux!;
+
+  const base = tmuxBase(root, dir);
   let name = base;
   for (let i = 2; live.has(name); i++) name = `${base}-${i}`;
 
@@ -108,7 +113,6 @@ export function launch(root: string, rel: string, opts: LaunchOptions = {}): str
   if (opts.permissionMode) claude.push("--permission-mode", opts.permissionMode);
   for (const tool of opts.allowedTools ?? []) claude.push("--allowedTools", tool);
   if (opts.resumeId) claude.push("--resume", opts.resumeId);
-  else if (opts.resume) claude.push("--continue");
   if (opts.prompt) claude.push("--", opts.prompt);
 
   // Passing the command as separate arguments makes tmux exec it directly, with no shell quoting.

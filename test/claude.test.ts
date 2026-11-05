@@ -156,12 +156,25 @@ test("a failed plan fails the item", async () => {
   assert.match(item.note!, /Haiku call failed/);
 });
 
-test("launch names sessions after the node, resumes with --continue, and needs the hooks", async () => {
+// The hook writes session files; the fake claude runs no hooks, so write one by hand.
+test("launch reuses the node's live session unless given a prompt", () => {
+  const root = seededRoot();
+  const first = launch(root, "work");
+  const sessions = path.join(root, "work/.node/sessions");
+  fs.mkdirSync(sessions, { recursive: true });
+  const s = { sessionId: "s1", pid: process.pid, cwd: path.join(root, "work"), tmux: first, state: "ready", updatedAt: new Date().toISOString() };
+  fs.writeFileSync(path.join(sessions, "s1.json"), JSON.stringify(s));
+  assert.equal(launch(root, "work", { resume: true }), first);
+  assert.equal(launch(root, "work"), first);
+  assert.equal(launch(root, "work", { prompt: "a job" }), `${first}-2`);
+});
+
+test("launch names sessions after the node, starts fresh with no last conversation, and needs the hooks", async () => {
   const root = seededRoot();
   assert.equal(launch(root, "work"), "orca-work");
   assert.equal(launch(root, "work", { resume: true }), "orca-work-2");
   await until(() => calls().filter((c) => !c.includes("-p")).length === 2 || undefined);
-  assert.ok(calls().some((c) => c.includes("--continue")));
+  assert.ok(!calls().some((c) => c.includes("--continue")));
   installHooks(USER_SETTINGS, true);
   try {
     assert.throws(() => launch(root, "work"), /orca hooks are not installed/);

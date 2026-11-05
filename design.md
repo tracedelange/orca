@@ -287,7 +287,7 @@ A result stays new until the person opens the terminal of that session. The brow
 **Detail panel.** A click on a leaf, or on the `i` mark of a container, opens the panel. The panel shows the title, goal, fields, issues, sessions, and the rendered body. It has a copy button for the path of the `CLAUDE.md`. Its controls:
 
 - Edit, Add child, Move, and Delete do the same as `orca set`, `new`, `mv`, and `rm`. Delete moves the node to `.trash`.
-- Launch and Resume start a session. A picker selects the hub or a worker.
+- Open attaches to the live session, or resumes or starts one. A picker selects the hub or a worker.
 - Terminal, End, and Move into orca act on each session.
 - End needs a second click when the session is working or needs the person, or when the node has uncommitted files.
 - A session with `done` shows "done" and a ✓ on the rail. Its End button is End + archive.
