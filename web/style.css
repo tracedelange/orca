@@ -148,6 +148,7 @@ header > * { flex-shrink: 0; }
 #crumbs a:hover { color: var(--ink); }
 #crumbs span.here { color: var(--ink); }
 #crumbs .sep { margin: 0 8px; }
+#crumbs .unfocus { margin-left: 12px; }
 
 #map { position: fixed; inset: 0; width: 100%; height: 100%; }
 

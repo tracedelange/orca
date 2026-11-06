@@ -940,6 +940,7 @@ function renderCrumbs() {
     else el.href = hashFor(d.data.path);
     crumbs.append(el);
   });
+  if (graphRoot.parent) crumbs.append(Object.assign(document.createElement("a"), { className: "unfocus", href: hashFor(""), textContent: "× Unfocus" }));
 }
 
 // ---- Panel ----
@@ -1016,6 +1017,8 @@ function renderPanel(n) {
       <button data-form="child" type="button"><kbd>n</kbd>Add child</button>
       <button class="newtodo" type="button"><kbd>t</kbd>Add todo</button>
       <button data-form="edit" type="button"><kbd>e</kbd>Edit</button>
+      ${n.path === graphRoot.data.path && n.path ? `<button data-root="" type="button" title="Show the whole tree again">Unfocus</button>`
+        : byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button" title="Show only this node's subtree and its sessions">Focus</button>` : ""}
       ${whereSelect()}
     </div>
     <details class="more"><summary>More</summary>
@@ -1026,7 +1029,6 @@ function renderPanel(n) {
       <div class="actions">
         ${n.path ? `<button data-form="move" type="button">Move</button><button data-archive="${n.archived ? "" : "1"}" type="button">${n.archived ? "Unarchive" : "Archive"}</button><button data-form="remove" type="button">Delete</button>` : ""}
         ${byPath.get(n.path)?.children ? `<button class="consolidate" type="button" title="Propose a cleaner structure for this subtree">Consolidate…</button>` : ""}
-        ${byPath.get(n.path)?.children && n.path !== graphRoot.data.path ? `<button data-root="${esc(n.path)}" type="button">Set as root</button>` : ""}
       </div>
     </details>
     <p class="alert" hidden></p>
