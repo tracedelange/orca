@@ -1927,6 +1927,8 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   document.body.classList.add("mode-term");
   termview.hidden = false;
   const d = byPath.get(path);
+  // Opening a queue worker means you work in it directly, so it becomes a normal node and stays on the rail.
+  if (d?.data.background && !watch) post("update", { path, background: false }).then(() => { d.data.background = undefined; renderRail(); });
   const title = d?.data.title ?? path;
   const trail = d ? d.ancestors().reverse().slice(0, -1).map((a) => a.data.title).join(" / ") : path || "/";
   termview.querySelector(".title").textContent = title;

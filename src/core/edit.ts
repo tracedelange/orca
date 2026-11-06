@@ -66,8 +66,8 @@ export function removeNode(root: string, rel: string): string {
 }
 
 // Edits title and goal in place. Other frontmatter keys, comments and the rest of the body are kept.
-// An empty goal removes the ## Goal section. archived: false removes the key.
-export function updateNode(root: string, rel: string, fields: { title?: string; goal?: string; archived?: boolean; parent?: string }) {
+// An empty goal removes the ## Goal section. archived: false and background: false remove the key.
+export function updateNode(root: string, rel: string, fields: { title?: string; goal?: string; archived?: boolean; background?: false; parent?: string }) {
   const file = path.join(resolveInRoot(root, rel), "CLAUDE.md");
   const split = splitFrontmatter(fs.readFileSync(file, "utf8"));
   const doc = parseDocument(split.frontmatter ?? "");
@@ -86,6 +86,7 @@ export function updateNode(root: string, rel: string, fields: { title?: string; 
     if (fields.archived) doc.set("archived", true);
     else doc.delete("archived");
   }
+  if (fields.background === false) doc.delete("background");
   if (fields.parent !== undefined) doc.set("parent", fields.parent);
   fs.writeFileSync(file, `---\n${doc.toString()}---\n${body}`);
 }
