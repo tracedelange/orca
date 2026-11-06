@@ -2033,6 +2033,25 @@ async function openTerminal(name, path = selected ?? graphRoot.data.path, host =
   xterm.focus();
 }
 
+// Dropping a file (a screenshot thumbnail, say) pastes its path, as a plain terminal does.
+// The browser hides the real path, so the server saves a copy and the copy's path goes in.
+const termEl = document.getElementById("term");
+termEl.addEventListener("dragover", (e) => e.preventDefault()); // otherwise Chrome opens the file
+termEl.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  if (!term || term.watch) return;
+  const files = [...e.dataTransfer.files];
+  if (!files.length) return term.xterm.paste(e.dataTransfer.getData("text/plain"));
+  // A worker cannot read the hub's files.
+  if (term.host) return term.xterm.write("\r\n[drops need a local session]\r\n");
+  const paths = await Promise.all(files.map(async (f) => {
+    const res = await fetch(`/api/drop?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+    return (await res.json()).path;
+  }));
+  term.xterm.paste(paths.join(" "));
+  term.xterm.focus();
+});
+
 function termTheme() {
   const css = getComputedStyle(document.documentElement);
   const v = (name) => css.getPropertyValue(name).trim();

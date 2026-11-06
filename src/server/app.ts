@@ -1,6 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
@@ -138,6 +139,18 @@ export function createServer(root: string) {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
         res.on("finish", () => spawn(process.execPath, [CLI, "restart"], { detached: true, stdio: "ignore" }).unref());
         return json(res, 200, { ok: true });
+      }
+      // A file dropped on the terminal. The browser cannot see its path, so save a copy and return that path.
+      if (url.pathname === "/api/drop") {
+        if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
+        const dir = path.join(os.tmpdir(), "orca-drops");
+        fs.mkdirSync(dir, { recursive: true });
+        const name = (url.searchParams.get("name") ?? "").replace(/[^\w.-]+/g, "-") || "drop";
+        const out = path.join(dir, `${Date.now()}-${name}`);
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk);
+        fs.writeFileSync(out, Buffer.concat(chunks));
+        return json(res, 200, { path: out });
       }
       if (url.pathname === "/api/tailnet") return json(res, 200, await readTailnet().catch(() => ({ state: "unavailable" })));
       if (url.pathname === "/api/usage") return json(res, 200, await readUsage().catch(() => ({ error: "unavailable" })));
