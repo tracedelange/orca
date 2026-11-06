@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.3.0](https://github.com/tracedelange/orca/compare/orca-v0.2.0...orca-v0.3.0) (2026-11-06)
+
+
+### Features
+
+* Done signal with End + archive, and uncommitted-files warning on End ([184dc81](https://github.com/tracedelange/orca/commit/184dc81a4d04e66fa10595e734dfb67be45e9506))
+* monitoring session state, set by a Monitoring: line at the end of a turn ([67250d7](https://github.com/tracedelange/orca/commit/67250d79bfd26768faea42a825e4af31f43a197b))
+* orca consolidate snapshots the node tree and starts a consolidation session ([089261c](https://github.com/tracedelange/orca/commit/089261c8ecc5b083542fff1bd987fd16387aff32))
+* parked ideas in a TODO.md per node ([03da10e](https://github.com/tracedelange/orca/commit/03da10eaca8418bd0035c1114004c0646effb381))
+* **viewer:** consolidate a node from its panel, with a subtree lock and accept/reject review ([c0e495e](https://github.com/tracedelange/orca/commit/c0e495e6c66accdf81c60320cf3070815d06d095))
+* **viewer:** drop a file on the terminal to paste its path ([68f90db](https://github.com/tracedelange/orca/commit/68f90db383577d2589e238aa65758ef85a7311c3))
+* **viewer:** End all button at the foot of the rail ([f6c2cae](https://github.com/tracedelange/orca/commit/f6c2cae37719c7bd6f27d75c49d3933927ed936d))
+* **viewer:** Focus button in the node panel and an Unfocus link in the header ([a33d4f9](https://github.com/tracedelange/orca/commit/a33d4f9d06cd5beb307434f01a6a4f0856877748))
+* **viewer:** hide the rail at half-page width ([23e44f6](https://github.com/tracedelange/orca/commit/23e44f6d9cda2c5fcb38602080cbb215396811f5))
+* **viewer:** mark unread; clear new result on reply ([f1db5d1](https://github.com/tracedelange/orca/commit/f1db5d1d2ad7d928b7916bcbaceef0affd879b28))
+* **viewer:** node maps from docs/map.drawio ([929f3ab](https://github.com/tracedelange/orca/commit/929f3aba92bc9071850b13c07ad5ba7671a24aec))
+* **viewer:** palette opens the node panel; tabbed, keyboard-first panel ([2c42f78](https://github.com/tracedelange/orca/commit/2c42f78dbe3a897826812f066f13c37a467333fc))
+* **viewer:** phone layout with Menu, Find and a terminal key bar ([0a64a36](https://github.com/tracedelange/orca/commit/0a64a3664356473c521d0bbff6b204225b0c2ee7))
+* **viewer:** plain tmux shells in node folders ([d32f6a6](https://github.com/tracedelange/orca/commit/d32f6a652f55dae9072a44a5323ef3eb802fab27))
+* **viewer:** quick todo capture, edit and undo; shared node field ([ed478ac](https://github.com/tracedelange/orca/commit/ed478aced939824c03ca5a9ae1531dd6c049d670))
+* **viewer:** rail toggle button and Docs folder button in the session view ([aaaba6a](https://github.com/tracedelange/orca/commit/aaaba6ad4445be49755e04e1f8dd6068af9a0c88))
+* **viewer:** switch Tailscale accounts from the palette ([32cce5d](https://github.com/tracedelange/orca/commit/32cce5d04e077a73e82902b3bdfb9c2f0679fc4a))
+* **web:** Restart orca command in the palette ([459f57d](https://github.com/tracedelange/orca/commit/459f57da5958276885ef540d8a30457f15d11196))
+
+
+### Bug Fixes
+
+* one session per node; single Open button ([3ccc164](https://github.com/tracedelange/orca/commit/3ccc1643abb2a2d6d818ad33b6633337fb5ce829))
+* **viewer:** opening a queue worker's session turns it into a normal node ([afd3f07](https://github.com/tracedelange/orca/commit/afd3f07b274d5778cfe1d1c082610702e94ba183))
+* **viewer:** orbit the whole graph around the root ([bfdff98](https://github.com/tracedelange/orca/commit/bfdff98bdcc5e3bee5eecd790f00eb8f1104776f))
+
 ## [0.2.0](https://github.com/tracedelange/orca/compare/orca-v0.1.0...orca-v0.2.0) (2026-10-15)
 
 
