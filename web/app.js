@@ -60,12 +60,25 @@ const opened = new Set(); // parents whose "others" node was clicked; packing th
 const archivedButton = document.getElementById("archived");
 archivedButton.classList.toggle("on", showArchived);
 let railOff = readFlag("orca.railOff");
+// Half-page width: the rail starts hidden so the map and terminal keep their room.
+// The Rail button shows it until the window leaves that width; this choice is not saved.
+const halfPage = matchMedia("(min-width: 701px) and (max-width: 1100px)");
+let halfPageRailOn = false;
+const railHidden = () => (halfPage.matches ? !halfPageRailOn : railOff);
 const railButton = document.getElementById("railbtn");
-railButton.classList.toggle("on", !railOff);
+railButton.classList.toggle("on", !railHidden());
 railButton.addEventListener("click", () => {
-  railOff = !railOff;
-  railButton.classList.toggle("on", !railOff);
-  try { localStorage.setItem("orca.railOff", railOff ? "1" : "0"); } catch {}
+  if (halfPage.matches) halfPageRailOn = !halfPageRailOn;
+  else {
+    railOff = !railOff;
+    try { localStorage.setItem("orca.railOff", railOff ? "1" : "0"); } catch {}
+  }
+  railButton.classList.toggle("on", !railHidden());
+  renderRail();
+});
+halfPage.addEventListener("change", () => {
+  halfPageRailOn = false;
+  railButton.classList.toggle("on", !railHidden());
   renderRail();
 });
 
@@ -742,7 +755,7 @@ function renderRail() {
   prompt.title = open?.summary ?? "";
 
   const wasHidden = rail.hidden;
-  rail.hidden = railOff || (!sessions.length && !jobs.length && !shells.length);
+  rail.hidden = railHidden() || (!sessions.length && !jobs.length && !shells.length);
   // Working and monitoring sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
   const groups = { working: jobs.map(jobRow), rest: [], parked: [], shells: shells.map(shellRow) };

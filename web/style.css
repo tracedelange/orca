@@ -617,6 +617,13 @@ a.button { display: inline-block; text-decoration: none; }
   #panel kbd { display: none; }
 }
 
+/* ---- Half page: the rail starts hidden (app.js); the usage meters give way so every header button fits ---- */
+@media (min-width: 701px) and (max-width: 1100px) {
+  header { padding: 0 16px; gap: 10px; }
+  #usage { display: none; }
+  #about { margin-left: auto; }
+}
+
 /* ---- Phone: the rail is the home screen; the panel and terminal fill it ---- */
 @media (max-width: 700px) {
   :root { --bar: 56px; }
