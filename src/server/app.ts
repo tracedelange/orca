@@ -18,7 +18,8 @@ import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readTailnet, switchTailnet } from "../core/tailscale.ts";
 import { addTodo, allTodos, doneTodo, editTodo, nodeTodo, queueTodo, readTodos, undoTodo } from "../core/todo.ts";
 import { readUsage } from "../core/usage.ts";
-import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
+import { cutoff, summarize, summaryMarkdown } from "../core/summarize.ts";
+import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree, toHtml } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, SAFE, startSession, type WorkerState } from "../core/workers.ts";
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -157,6 +158,11 @@ export function createServer(root: string) {
       if (url.pathname === "/api/uncommitted") {
         const id = url.searchParams.get("session") ?? "";
         return json(res, 200, { count: workerSession(id) ? 0 : uncommitted(root, id) });
+      }
+      if (url.pathname === "/api/summary") {
+        const n = (k: string) => Number(url.searchParams.get(k)) || undefined;
+        const s = summarize(root, url.searchParams.get("path") ?? "", cutoff({ days: n("days"), hours: n("hours") }));
+        return json(res, 200, { ...s, html: toHtml(summaryMarkdown(s)) });
       }
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
       // One node's parked ideas, or with no path, every node's.

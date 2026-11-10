@@ -1697,6 +1697,10 @@ const COMMANDS = [ // { name, run }
   { name: "New todo", run: () => openTodoer() },
   { name: "Open todo", run: () => openTodos(hereNode()) },
   { name: "All todos", run: () => openTodos(null) },
+  // Each asks for the node to summarize; only that node and its children are included.
+  { name: "Summarize today", run: () => openPalette((p) => openSummary(p, "days=1")) },
+  { name: "Summarize last 24 hours", run: () => openPalette((p) => openSummary(p, "hours=24")) },
+  { name: "Summarize last 7 days", run: () => openPalette((p) => openSummary(p, "days=7")) },
   { name: "Restart orca", run: () => restartOrca() },
 ];
 let paletteItems = [];
@@ -2131,7 +2135,21 @@ async function openDoc(file) {
   docview.querySelector(".copied")?.remove();
   docview.querySelector(".copyobs").hidden = !obsidian;
   docview.querySelector(".copyobs").textContent = "Copy to Obsidian";
+  for (const b of docview.querySelectorAll(".popout, .reveal")) b.hidden = false;
   docview.querySelector(".md").innerHTML = d.html;
+  docview.hidden = false;
+  docview.scrollTop = 0;
+}
+
+// Recent Log lines, changed docs and repo commits under a node, shown in the document view.
+// `range` is "days=N" or "hours=N".
+async function openSummary(path, range) {
+  const res = await fetch(`/api/summary?path=${encodeURIComponent(path)}&${range}`);
+  const d = await res.json();
+  docview.querySelector(".where").textContent = `orca summarize ${path || "."} --${range.replace("=", " ")}`;
+  docview.querySelector(".copied")?.remove();
+  for (const b of docview.querySelectorAll(".copyobs, .popout, .reveal")) b.hidden = true;
+  docview.querySelector(".md").innerHTML = res.ok ? d.html : `<p>${esc(d.error)}</p>`;
   docview.hidden = false;
   docview.scrollTop = 0;
 }

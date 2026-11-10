@@ -73,6 +73,33 @@ test("tree prints titles indented by depth", () => {
   assert.ok(lines.some((l) => /^    \S/.test(l)));
 });
 
+test("summarize lists recent Log lines, changed docs and repo commits under a node", () => {
+  const { root, orca } = setup();
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "orca-repo-"));
+  const git = (...a: string[]) => execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
+  git("init", "-q");
+  git("commit", "-q", "--allow-empty", "-m", "feat: thing");
+  const file = path.join(root, "work/vmt-analyzer/CLAUDE.md");
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("repo: ~/code/vmt-analyzer", `repo: ${repo}`) + `- ${today}: Shipped it.\n`);
+  fs.mkdirSync(path.join(root, "work/docs"));
+  fs.writeFileSync(path.join(root, "work/docs/plan.md"), "# Plan\n");
+  fs.appendFileSync(path.join(root, "personal/CLAUDE.md"), `- ${today}: Not under work.\n`);
+
+  const s = JSON.parse(orca("summarize", "work", "--json"));
+  assert.equal(s.since, today);
+  assert.deepEqual(s.nodes.map((n: { path: string }) => n.path), ["work", "work/vmt-analyzer"]);
+  assert.deepEqual(s.nodes[0].docs, ["plan.md"]);
+  assert.deepEqual(s.nodes[0].log, []); // the 2026-01-01 line is too old
+  assert.deepEqual(s.nodes[1].log, [`${today}: Shipped it.`]);
+  assert.deepEqual(s.repos.map((r: { nodes: string[] }) => r.nodes), [["work/vmt-analyzer"]]);
+  assert.match(s.repos[0].commits[0], /feat: thing$/);
+  assert.match(orca("summarize", "work"), /## Repo /);
+  const y = new Date(Date.now() - 86_400_000);
+  assert.equal(JSON.parse(orca("summarize", "work", "--hours", "24", "--json")).since, `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`);
+});
+
 test("wait and send need a live session on the node", () => {
   const { orca, fails } = setup();
   assert.equal(orca("wait", "work"), "no live session\n");

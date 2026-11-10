@@ -14,6 +14,7 @@ import { claim, claimedNodeDir, findClaudePid } from "../core/claims.ts";
 import { dropSession, liveTmuxSessions, readSessions, tmuxBase } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
 import { flatten, nodeContext, readTree, type TreeNode } from "../core/tree.ts";
+import { cutoff, summarize, summaryMarkdown } from "../core/summarize.ts";
 import { daemon } from "./daemon.ts";
 
 const root = rootDir();
@@ -27,6 +28,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   "install-hooks": hooks,
   dispatch: dispatchPrompt,
   consolidate: consolidateNode,
+  summarize: summarizeNode,
   end,
   claim: claimSession,
   adopt,
@@ -45,7 +47,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
 const HELP = `usage: orca <command>
 
 server:  up | down | status | restart | open | logs | uninstall
-nodes:   new | mv | rm | set | tree | check | init | queue | todo
+nodes:   new | mv | rm | set | tree | check | init | queue | todo | summarize
 claude:  launch | dispatch | consolidate | end | claim | adopt | worker | install-hooks
 child:   wait | send
 
@@ -170,6 +172,23 @@ function consolidateNode(argv: string[]) {
   const c = consolidate(root, argv[0]);
   console.log(`snapshot ${c.commit}; skipping live nodes: ${c.live.join(", ") || "none"}`);
   console.log(`started ${c.tmux}; attach with: ${attachCommand(c)}`);
+}
+
+// Recent Log lines, changed docs and repo commits under a node. "." is the root.
+function summarizeNode(argv: string[]) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: { days: { type: "string", default: "1" }, hours: { type: "string" }, json: { type: "boolean" } },
+  });
+  const days = Number(values.days);
+  const hours = values.hours === undefined ? undefined : Number(values.hours);
+  if (positionals.length !== 1 || !(days >= 1) || (hours !== undefined && !(hours > 0))) {
+    throw new Error("usage: orca summarize <path> [--days N | --hours N] [--json]");
+  }
+  requireRoot();
+  const s = summarize(root, positionals[0] === "." ? "" : positionals[0], cutoff({ days, hours }));
+  process.stdout.write(values.json ? JSON.stringify(s, null, 2) + "\n" : summaryMarkdown(s));
 }
 
 // The node of the Claude session that ran this command, if any.

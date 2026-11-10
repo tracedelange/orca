@@ -30,7 +30,7 @@ const markdown = new Marked({
     if ((t.type === "link" || t.type === "image") && /^\s*(javascript|vbscript|data):/i.test(t.href)) t.href = "#";
   },
 });
-const toHtml = (md: string) => markdown.parse(md, { async: false });
+export const toHtml = (md: string) => markdown.parse(md, { async: false });
 
 export function readTree(root: string): TreeNode {
   return readNode(root, "");
