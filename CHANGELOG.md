@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/tracedelange/orca/compare/orca-v0.3.0...orca-v0.4.0) (2026-11-11)
+
+
+### Features
+
+* Claude writes orca summaries into the node's docs ([ba8f764](https://github.com/tracedelange/orca/commit/ba8f76415647ed8f7d7204dce5cbbe6324a4b1aa))
+* orca summarize lists recent work under a node ([79703cb](https://github.com/tracedelange/orca/commit/79703cbc86425f202af51a3fedea676b3cd25475))
+
 ## [0.3.0](https://github.com/tracedelange/orca/compare/orca-v0.2.0...orca-v0.3.0) (2026-11-06)
 
 
