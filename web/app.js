@@ -39,6 +39,7 @@ let parked = {}; // sessionId -> when you parked it; the server keeps it for eve
 let parkedText = "";
 let shells = []; // plain tmux shells: [{ tmux, path, cwd, created }]
 let jobs = []; // dispatches still being placed, or failed: [{ id, prompt, host, startedAt, error }]
+let summaries = []; // summaries Claude is writing or has written: [{ id, path, label, startedAt, file, error }]
 const revealed = new Set(); // sessionIds whose node has been unpacked onto the map once
 let showArchived = readFlag("orca.showArchived");
 let obsidian = null; // { vault, folder } once the user opts in to copying documents there
@@ -103,8 +104,9 @@ visualViewport?.addEventListener("resize", () => {
 
 async function load() {
   fetch("/api/workers").then((r) => r.json()).then((w) => (workerList = w)).catch(() => {});
-  const [res, seenRes, jobsRes, parkedRes, shellsRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches"), fetch("/api/parked"), fetch("/api/shells")]);
+  const [res, seenRes, jobsRes, parkedRes, shellsRes, summariesRes] = await Promise.all([fetch("/api/tree"), fetch("/api/seen"), fetch("/api/dispatches"), fetch("/api/parked"), fetch("/api/shells"), fetch("/api/summaries")]);
   jobs = await jobsRes.json();
+  alertSummaries(await summariesRes.json());
   shells = await shellsRes.json();
   const text = await res.text();
   if (!res.ok) return (crumbs.textContent = JSON.parse(text).error);
@@ -755,10 +757,10 @@ function renderRail() {
   prompt.title = open?.summary ?? "";
 
   const wasHidden = rail.hidden;
-  rail.hidden = railHidden() || (!sessions.length && !jobs.length && !shells.length);
+  rail.hidden = railHidden() || (!sessions.length && !jobs.length && !summaries.length && !shells.length);
   // Working and monitoring sessions get their own section at the top; the rest stay most urgent first.
   // Dispatches still being placed sit at the top of Working.
-  const groups = { working: jobs.map(jobRow), rest: [], parked: [], shells: shells.map(shellRow) };
+  const groups = { working: [...jobs.map(jobRow), ...summaries.map(summaryRow)], rest: [], parked: [], shells: shells.map(shellRow) };
   for (const s of sessions) groups[isParked(s) ? "parked" : ["working", "monitoring"].includes(railState(s)) ? "working" : "rest"].push(railRow(s));
   for (const [name, list] of Object.entries(groups)) {
     const section = rail.querySelector(`[data-group="${name}"]`);
@@ -840,7 +842,32 @@ function jobRow(j) {
   </button>`).join("")}</li>`;
 }
 
+// A summary Claude is writing; when it is ready, a click opens it and clears the row.
+function summaryRow(j) {
+  const title = byPath.get(j.path)?.data.title ?? (j.path || "/");
+  const [mark, st] = j.error ? ["!", "failed"] : j.file ? ["✓", "ready"] : ["…", "writing"];
+  return `<li><button type="button" class="end" data-sdismiss="${esc(j.id)}" title="Dismiss">Dismiss</button><button type="button" class="a-${j.error ? "failed" : j.file ? "new" : "working"}"${j.file ? ` data-sopen="${esc(j.id)}" title="Open the summary"` : ""}>
+    <span class="line"><span class="mark">${mark}</span><span class="name">Summary: ${esc(title)}</span><span class="st">${st}</span></span>
+    <span class="sum">${esc(j.error ?? j.label)}</span>
+    <span class="meta">${esc(j.path || "/")} · ${ago(j.startedAt)}</span>
+  </button></li>`;
+}
+
+async function openSummary(id) {
+  const j = summaries.find((x) => x.id === id);
+  if (!j) return;
+  await post("summarydismiss", { id }).catch(() => {});
+  openDoc(j.file);
+  load();
+}
+
 rail.addEventListener("click", async (e) => {
+  const sum = e.target.closest("[data-sopen], [data-sdismiss]");
+  if (sum) {
+    if (sum.dataset.sopen) return openSummary(sum.dataset.sopen);
+    await post("summarydismiss", { id: sum.dataset.sdismiss }).catch(() => {});
+    return load();
+  }
   const job = e.target.closest("[data-retry], [data-dismiss], [data-choose]");
   if (job) {
     const { retry, dismiss, choose, index } = job.dataset;
@@ -922,6 +949,24 @@ function alertChanges(sessions) {
       focus();
       n.close();
       rail.querySelector(`button[data-sid="${CSS.escape(s.sessionId)}"]`)?.click();
+    };
+  }
+}
+
+// Notifies when a summary that was being written is ready or failed, unless you are looking.
+// The rail row shows the same thing, so nothing is lost when notifications are off.
+function alertSummaries(next) {
+  const before = new Map(summaries.map((j) => [j.id, !!(j.file || j.error)]));
+  summaries = next;
+  if (!notify || Notification.permission !== "granted" || document.hasFocus()) return;
+  for (const j of next) {
+    if (!(j.file || j.error) || before.get(j.id) !== false) continue;
+    const title = byPath.get(j.path)?.data.title ?? (j.path || "/");
+    const n = new Notification(`Summary: ${title}`, { body: j.error ?? "Ready. Click to open.", tag: `summary-${j.id}` });
+    n.onclick = () => {
+      focus();
+      n.close();
+      if (j.file) openSummary(j.id);
     };
   }
 }
@@ -1698,9 +1743,9 @@ const COMMANDS = [ // { name, run }
   { name: "Open todo", run: () => openTodos(hereNode()) },
   { name: "All todos", run: () => openTodos(null) },
   // Each asks for the node to summarize; only that node and its children are included.
-  { name: "Summarize today", run: () => openPalette((p) => openSummary(p, "days=1")) },
-  { name: "Summarize last 24 hours", run: () => openPalette((p) => openSummary(p, "hours=24")) },
-  { name: "Summarize last 7 days", run: () => openPalette((p) => openSummary(p, "days=7")) },
+  { name: "Summarize today", run: () => openPalette((p) => startSummary(p, { days: 1 })) },
+  { name: "Summarize last 24 hours", run: () => openPalette((p) => startSummary(p, { hours: 24 })) },
+  { name: "Summarize last 7 days", run: () => openPalette((p) => startSummary(p, { days: 7 })) },
   { name: "Restart orca", run: () => restartOrca() },
 ];
 let paletteItems = [];
@@ -2135,23 +2180,15 @@ async function openDoc(file) {
   docview.querySelector(".copied")?.remove();
   docview.querySelector(".copyobs").hidden = !obsidian;
   docview.querySelector(".copyobs").textContent = "Copy to Obsidian";
-  for (const b of docview.querySelectorAll(".popout, .reveal")) b.hidden = false;
   docview.querySelector(".md").innerHTML = d.html;
   docview.hidden = false;
   docview.scrollTop = 0;
 }
 
-// Recent Log lines, changed docs and repo commits under a node, shown in the document view.
-// `range` is "days=N" or "hours=N".
-async function openSummary(path, range) {
-  const res = await fetch(`/api/summary?path=${encodeURIComponent(path)}&${range}`);
-  const d = await res.json();
-  docview.querySelector(".where").textContent = `orca summarize ${path || "."} --${range.replace("=", " ")}`;
-  docview.querySelector(".copied")?.remove();
-  for (const b of docview.querySelectorAll(".copyobs, .popout, .reveal")) b.hidden = true;
-  docview.querySelector(".md").innerHTML = res.ok ? d.html : `<p>${esc(d.error)}</p>`;
-  docview.hidden = false;
-  docview.scrollTop = 0;
+// Claude writes the summary into the node's docs/ in the background. Its rail row shows progress.
+async function startSummary(path, range) {
+  await post("summarize", { path, ...range }).catch(() => {});
+  load();
 }
 
 // Acts on the file on the Mac that runs the server: "open" uses the default app for .md files,

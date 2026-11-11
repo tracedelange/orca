@@ -14,7 +14,7 @@ import { claim, claimedNodeDir, findClaudePid } from "../core/claims.ts";
 import { dropSession, liveTmuxSessions, readSessions, tmuxBase } from "../core/sessions.ts";
 import { addWorker, pollWorkers, readWorkers, remoteEnd, removeWorker, startSession } from "../core/workers.ts";
 import { flatten, nodeContext, readTree, type TreeNode } from "../core/tree.ts";
-import { cutoff, summarize, summaryMarkdown } from "../core/summarize.ts";
+import { cutoff, summarize, summaryMarkdown, writeSummary } from "../core/summarize.ts";
 import { daemon } from "./daemon.ts";
 
 const root = rootDir();
@@ -175,19 +175,23 @@ function consolidateNode(argv: string[]) {
 }
 
 // Recent Log lines, changed docs and repo commits under a node. "." is the root.
-function summarizeNode(argv: string[]) {
+// With --write, Claude writes them up as docs/summary-<date>.md in the node.
+async function summarizeNode(argv: string[]) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { days: { type: "string", default: "1" }, hours: { type: "string" }, json: { type: "boolean" } },
+    options: { days: { type: "string", default: "1" }, hours: { type: "string" }, json: { type: "boolean" }, write: { type: "boolean" } },
   });
   const days = Number(values.days);
   const hours = values.hours === undefined ? undefined : Number(values.hours);
   if (positionals.length !== 1 || !(days >= 1) || (hours !== undefined && !(hours > 0))) {
-    throw new Error("usage: orca summarize <path> [--days N | --hours N] [--json]");
+    throw new Error("usage: orca summarize <path> [--days N | --hours N] [--json | --write]");
   }
   requireRoot();
-  const s = summarize(root, positionals[0] === "." ? "" : positionals[0], cutoff({ days, hours }));
+  const rel = positionals[0] === "." ? "" : positionals[0];
+  // --write has Claude write the summary up into the node's docs/.
+  if (values.write) return console.log(await writeSummary(root, rel, { days, hours }));
+  const s = summarize(root, rel, cutoff({ days, hours }));
   process.stdout.write(values.json ? JSON.stringify(s, null, 2) + "\n" : summaryMarkdown(s));
 }
 

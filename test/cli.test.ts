@@ -74,7 +74,7 @@ test("tree prints titles indented by depth", () => {
 });
 
 test("summarize lists recent Log lines, changed docs and repo commits under a node", () => {
-  const { root, orca } = setup();
+  const { root, orca, fails } = setup();
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "orca-repo-"));
@@ -96,6 +96,12 @@ test("summarize lists recent Log lines, changed docs and repo commits under a no
   assert.deepEqual(s.repos.map((r: { nodes: string[] }) => r.nodes), [["work/vmt-analyzer"]]);
   assert.match(s.repos[0].commits[0], /feat: thing$/);
   assert.match(orca("summarize", "work"), /## Repo /);
+  // --write has Claude write it up into the node's docs/; an earlier summary is not a changed doc.
+  const written = orca("summarize", "work", "--write").trim();
+  assert.equal(written, path.join(root, "work/docs", `summary-${today}.md`));
+  assert.match(fs.readFileSync(written, "utf8"), /^# Summary: Work, today\n[\s\S]*Summary of: # Summary of work since/);
+  assert.deepEqual(JSON.parse(orca("summarize", "work", "--json")).nodes[0].docs, ["plan.md"]);
+  fails(["summarize", "home", "--write"], /nothing recorded under home/);
   const y = new Date(Date.now() - 86_400_000);
   assert.equal(JSON.parse(orca("summarize", "work", "--hours", "24", "--json")).since, `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`);
 });

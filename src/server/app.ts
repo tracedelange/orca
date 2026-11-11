@@ -18,8 +18,8 @@ import { markSeen, readParked, readSeen, setParked } from "../core/seen.ts";
 import { readTailnet, switchTailnet } from "../core/tailscale.ts";
 import { addTodo, allTodos, doneTodo, editTodo, nodeTodo, queueTodo, readTodos, undoTodo } from "../core/todo.ts";
 import { readUsage } from "../core/usage.ts";
-import { cutoff, summarize, summaryMarkdown } from "../core/summarize.ts";
-import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree, toHtml } from "../core/tree.ts";
+import { dismissSummary, listSummaries, queueSummary } from "../core/summarize.ts";
+import { attachWorkerSessions, docPath, flatten, readDoc, readNodeDetail, readTree } from "../core/tree.ts";
 import { attachArgs, findWorker, pollWorkers, remoteEnd, SAFE, startSession, type WorkerState } from "../core/workers.ts";
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -71,6 +71,9 @@ const EDITS: Record<string, (root: string, b: any) => unknown> = {
   retry: (root, b) => (retryDispatch(root, String(b.id ?? "")), {}),
   choose: (root, b) => chooseDispatch(root, String(b.id ?? ""), Number(b.index)),
   dismiss: (root, b) => (dismissDispatch(String(b.id ?? "")), {}),
+  // Claude writes a summary into the node's docs/ in the background; /api/summaries shows its progress.
+  summarize: (root, b) => queueSummary(root, String(b.path ?? ""), { days: Number(b.days) || undefined, hours: Number(b.hours) || undefined }),
+  summarydismiss: (root, b) => (dismissSummary(String(b.id ?? "")), {}),
   queue: (root, b) => (addToQueue(root, b.path, String(b.task ?? "")), {}),
   todo: (root, b) => (addTodo(root, b.path, String(b.idea ?? "")), {}),
   tododone: (root, b) => (doneTodo(root, b.path, Number(b.n)), {}),
@@ -129,6 +132,7 @@ export function createServer(root: string) {
       if (url.pathname === "/api/parked") return json(res, 200, readParked(root));
       if (url.pathname === "/api/obsidian") return json(res, 200, { vaults: listVaults(), obsidian: readObsidian(root) ?? null });
       if (url.pathname === "/api/dispatches") return json(res, 200, listJobs());
+      if (url.pathname === "/api/summaries") return json(res, 200, listSummaries());
       if (url.pathname === "/api/workers") return json(res, 200, workers.map(({ host, name, error }) => ({ host, name, error })));
       if (url.pathname === "/api/tailnet/switch") {
         if (req.method !== "POST" || !sameOrigin(req)) return json(res, 403, { error: "forbidden" });
@@ -158,11 +162,6 @@ export function createServer(root: string) {
       if (url.pathname === "/api/uncommitted") {
         const id = url.searchParams.get("session") ?? "";
         return json(res, 200, { count: workerSession(id) ? 0 : uncommitted(root, id) });
-      }
-      if (url.pathname === "/api/summary") {
-        const n = (k: string) => Number(url.searchParams.get(k)) || undefined;
-        const s = summarize(root, url.searchParams.get("path") ?? "", cutoff({ days: n("days"), hours: n("hours") }));
-        return json(res, 200, { ...s, html: toHtml(summaryMarkdown(s)) });
       }
       if (url.pathname === "/api/node") return json(res, 200, readNodeDetail(root, url.searchParams.get("path") ?? ""));
       // One node's parked ideas, or with no path, every node's.

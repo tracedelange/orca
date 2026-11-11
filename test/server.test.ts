@@ -148,6 +148,19 @@ test("a consolidating subtree refuses viewer edits and launches, and shows its r
   }
 });
 
+test("summarize runs in the background and keeps its result until dismissed", async () => {
+  const post = async (op: string, body: unknown) =>
+    (await fetch(`${base}/api/nodes/${op}`, { method: "POST", body: JSON.stringify(body), headers: { origin: base } })).json();
+  const list = async () => (await fetch(`${base}/api/summaries`)).json();
+  // The seed's Log lines are old, so there is nothing to write up.
+  const job = await post("summarize", { path: "home", days: 1 });
+  assert.equal(job.label, "today");
+  await new Promise((r) => setTimeout(r, 50));
+  assert.match((await list()).find((j: any) => j.id === job.id).error, /nothing recorded under home/);
+  await post("summarydismiss", { id: job.id });
+  assert.equal((await list()).length, 0);
+});
+
 test("dispatch returns at once and keeps a failed job for retry until dismissed", async () => {
   const post = async (op: string, body: unknown) =>
     (await fetch(`${base}/api/nodes/${op}`, { method: "POST", body: JSON.stringify(body), headers: { origin: base } })).json();
